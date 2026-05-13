@@ -1,0 +1,21 @@
+{
+  "name": "@aitek/workflows",
+  "version": "0.0.1",
+  "private": true,
+  "license": "UNLICENSED",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@aitek/types": "*"
+  },
+  "devDependencies": {
+    "@aitek/tsconfig": "*",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}

@@ -1,0 +1,975 @@
+// AiTek Portal — Prisma Schema
+// Prisma v7: url is in prisma.config.ts, not here.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────
+
+enum UserRole {
+  CLIENT_USER
+  CLIENT_ADMIN
+  AITEK_TEAM_MEMBER
+  AITEK_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+enum CompanyMembershipRole {
+  CLIENT_USER
+  CLIENT_ADMIN
+}
+
+enum KYCStatus {
+  NOT_STARTED
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  RESUBMISSION_REQUIRED
+}
+
+enum KYCRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  UNSET
+}
+
+enum KYCDocumentCategory {
+  BUSINESS_REGISTRATION
+  TAX_ID
+  GOVERNMENT_ID
+  ADDRESS_PROOF
+  NDA
+  OTHER
+}
+
+enum KYCDocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FLAGGED
+}
+
+enum OnboardingStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+enum QuestionType {
+  TEXT
+  LONG_TEXT
+  MULTIPLE_CHOICE
+  CHECKBOX
+  FILE_UPLOAD
+  BUDGET_SLIDER
+  TIMELINE_SELECTOR
+  RATING_SCALE
+  URL_INPUT
+  TEAM_SIZE
+  VOICE_NOTE
+}
+
+enum ProjectStatus {
+  DISCOVERY
+  PLANNING
+  DESIGN
+  DEVELOPMENT
+  QA
+  DEPLOYMENT
+  COMPLETED
+  ON_HOLD
+  CANCELLED
+}
+
+enum ProjectMembershipRole {
+  AITEK_LEAD
+  AITEK_MEMBER
+  CLIENT_STAKEHOLDER
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  AWAITING_APPROVAL
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum DocumentAccessLevel {
+  INTERNAL
+  CLIENT_VISIBLE
+}
+
+enum AgreementStatus {
+  DRAFT
+  PENDING_ACKNOWLEDGMENT
+  ACKNOWLEDGED
+  REJECTED
+  EXPIRED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  VIEWED
+  OVERDUE
+  PAID
+  CANCELLED
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+}
+
+enum NotificationType {
+  KYC_STATUS_CHANGED
+  PROJECT_CREATED
+  MILESTONE_SUBMITTED
+  MILESTONE_APPROVED
+  MILESTONE_REJECTED
+  MESSAGE_RECEIVED
+  MESSAGE_MENTION
+  DOCUMENT_UPLOADED
+  AGREEMENT_SENT
+  AGREEMENT_ACKNOWLEDGED
+  INVOICE_CREATED
+  ONBOARDING_COMPLETED
+  TEAM_MEMBER_INVITED
+  CUSTOM_REQUEST_RECEIVED
+}
+
+enum AIOutputType {
+  ONBOARDING_SUMMARY
+  KYC_RISK_FLAGS
+  PROJECT_BRIEF
+  QUESTIONNAIRE_SUMMARY
+}
+
+enum AIOutputStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+enum AuditAction {
+  CREATED
+  UPDATED
+  DELETED
+  VIEWED
+  DOWNLOADED
+  APPROVED
+  REJECTED
+  SUBMITTED
+  ACKNOWLEDGED
+  INVITED
+  LOGIN
+  LOGOUT
+  INTERNAL_NOTE_VIEWED
+  KYC_DOCUMENT_REVIEWED
+  INVOICE_VIEWED
+  INVOICE_DOWNLOADED
+  AGREEMENT_ACKNOWLEDGED
+}
+
+// ─────────────────────────────────────────
+// IDENTITY & AUTH
+// ─────────────────────────────────────────
+
+model User {
+  id        String     @id @default(cuid())
+  clerkId   String     @unique
+  email     String     @unique
+  firstName String
+  lastName  String
+  phone     String?
+  avatarUrl String?
+  role      UserRole   @default(CLIENT_USER)
+  status    UserStatus @default(PENDING_VERIFICATION)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  companyMemberships      CompanyMembership[]      @relation("UserMemberships")
+  invitedMemberships      CompanyMembership[]      @relation("InvitedBy")
+  projectMemberships      ProjectMembership[]
+  notifications           Notification[]
+  notificationPref        NotificationPreference?
+  sentMessages            Message[]
+  uploadedDocuments       Document[]
+  uploadedKYCDocs         KYCDocument[]
+  aiOutputs               AIOutput[]               @relation("CreatedByUser")
+  internalNotes           InternalNote[]
+  milestoneApprovalsReq   MilestoneApproval[]      @relation("RequestedBy")
+  auditLogs               AuditLog[]
+  onboardingSessions      OnboardingSession[]
+  agreedAgreements        AgreementAuditRecord[]
+  kycSubmissions          KYCSubmission[]          @relation("SubmittedBy")
+  reviewedKYCSubmissions  KYCSubmission[]          @relation("ReviewedBy")
+
+  @@index([email])
+  @@index([clerkId])
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+// ─────────────────────────────────────────
+// ORGANIZATION
+// ─────────────────────────────────────────
+
+model Company {
+  id                  String       @id @default(cuid())
+  name                String
+  slug                String       @unique
+  businessType        String?
+  industry            String?
+  employeeCount       String?
+  country             String?
+  state               String?
+  website             String?
+  socialLinks         Json?
+  existingSoftwareStack Json?
+  annualRevenueRange  String?
+  yearsInBusiness     String?
+  kycStatus           KYCStatus    @default(NOT_STARTED)
+  portalAccessGranted Boolean      @default(false)
+  riskLevel           KYCRiskLevel @default(UNSET)
+  tags                String[]     @default([])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  memberships      CompanyMembership[]
+  kycSubmissions   KYCSubmission[]
+  selectedServices CompanySelectedService[]
+  onboardingSessions OnboardingSession[]
+  projects         Project[]
+  documents        Document[]
+  documentFolders  DocumentFolder[]
+  invoices         Invoice[]
+  agreements       Agreement[]
+  internalNotes    InternalNote[]
+  customRequests   CustomRequest[]
+  auditLogs        AuditLog[]
+
+  @@index([slug])
+  @@index([kycStatus])
+  @@index([portalAccessGranted])
+  @@map("companies")
+}
+
+model CompanyMembership {
+  id          String                @id @default(cuid())
+  userId      String
+  companyId   String
+  role        CompanyMembershipRole @default(CLIENT_USER)
+  isActive    Boolean               @default(true)
+  invitedById String?
+
+  joinedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User    @relation("UserMemberships", fields: [userId], references: [id], onDelete: Cascade)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invitedBy User?   @relation("InvitedBy", fields: [invitedById], references: [id])
+
+  @@unique([userId, companyId])
+  @@index([companyId])
+  @@index([userId])
+  @@map("company_memberships")
+}
+
+// ─────────────────────────────────────────
+// KYC & COMPLIANCE
+// ─────────────────────────────────────────
+
+model KYCSubmission {
+  id                String       @id @default(cuid())
+  companyId         String
+  submittedById     String
+  status            KYCStatus    @default(PENDING)
+  riskLevel         KYCRiskLevel @default(UNSET)
+  reviewedById      String?
+  reviewedAt        DateTime?
+  reviewNotes       String?
+  rejectionReasons  Json?
+  resubmissionCount Int          @default(0)
+  submittedAt       DateTime     @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company     Company       @relation(fields: [companyId], references: [id])
+  submittedBy User          @relation("SubmittedBy", fields: [submittedById], references: [id])
+  reviewedBy  User?         @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  documents   KYCDocument[]
+  aiOutputs   AIOutput[]
+  auditLogs   AuditLog[]
+
+  @@index([companyId])
+  @@index([status])
+  @@map("kyc_submissions")
+}
+
+model KYCDocument {
+  id              String              @id @default(cuid())
+  kycSubmissionId String
+  category        KYCDocumentCategory
+  fileName        String
+  fileKey         String
+  fileSize        Int
+  mimeType        String
+  uploadedById    String
+  status          KYCDocumentStatus   @default(PENDING)
+  reviewNotes     String?
+  aiFlags         Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  submission KYCSubmission @relation(fields: [kycSubmissionId], references: [id])
+  uploadedBy User          @relation(fields: [uploadedById], references: [id])
+
+  @@index([kycSubmissionId])
+  @@index([status])
+  @@map("kyc_documents")
+}
+
+// ─────────────────────────────────────────
+// SERVICES CATALOG
+// ─────────────────────────────────────────
+
+model ServiceCategory {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  services Service[]
+
+  @@map("service_categories")
+}
+
+model Service {
+  id          String  @id @default(cuid())
+  categoryId  String
+  name        String
+  slug        String  @unique
+  description String?
+  icon        String?
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  category               ServiceCategory          @relation(fields: [categoryId], references: [id])
+  questionnaireTemplates QuestionnaireTemplate[]
+  companySelections      CompanySelectedService[]
+
+  @@index([categoryId])
+  @@map("services")
+}
+
+model CompanySelectedService {
+  id        String  @id @default(cuid())
+  companyId String
+  serviceId String
+  sessionId String?
+
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+
+  @@unique([companyId, serviceId])
+  @@index([companyId])
+  @@map("company_selected_services")
+}
+
+// ─────────────────────────────────────────
+// QUESTIONNAIRE ENGINE
+// ─────────────────────────────────────────
+
+model QuestionnaireTemplate {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+  serviceId   String?
+  industry    String?
+  isDefault   Boolean @default(false)
+  isActive    Boolean @default(true)
+  version     Int     @default(1)
+  parentId    String?
+  createdById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  service   Service?  @relation(fields: [serviceId], references: [id])
+  questions Question[]
+  responses QuestionnaireResponse[]
+
+  @@index([serviceId])
+  @@index([isActive])
+  @@map("questionnaire_templates")
+}
+
+model Question {
+  id               String       @id @default(cuid())
+  templateId       String
+  parentQuestionId String?
+  text             String
+  helpText         String?
+  type             QuestionType
+  isRequired       Boolean      @default(true)
+  sortOrder        Int          @default(0)
+  section          String?
+  conditionalLogic Json?
+  options          Json?
+  budgetMin        Int?
+  budgetMax        Int?
+  budgetStep       Int?
+  budgetCurrency   String?      @default("USD")
+  timelineOptions  Json?
+  fileUploadConfig Json?
+  aiContextHint    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  template       QuestionnaireTemplate @relation(fields: [templateId], references: [id])
+  parentQuestion Question?             @relation("SubQuestions", fields: [parentQuestionId], references: [id])
+  subQuestions   Question[]            @relation("SubQuestions")
+  answers        Answer[]
+
+  @@index([templateId])
+  @@index([sortOrder])
+  @@map("questions")
+}
+
+model OnboardingSession {
+  id          String           @id @default(cuid())
+  companyId   String
+  userId      String
+  status      OnboardingStatus @default(NOT_STARTED)
+  currentStep String?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company               @relation(fields: [companyId], references: [id])
+  user      User                  @relation(fields: [userId], references: [id])
+  responses QuestionnaireResponse[]
+  aiOutputs AIOutput[]
+
+  @@index([companyId])
+  @@index([status])
+  @@map("onboarding_sessions")
+}
+
+model QuestionnaireResponse {
+  id              String           @id @default(cuid())
+  sessionId       String
+  templateId      String
+  templateVersion Int
+  status          OnboardingStatus @default(IN_PROGRESS)
+  startedAt       DateTime         @default(now())
+  completedAt     DateTime?
+
+  session  OnboardingSession     @relation(fields: [sessionId], references: [id])
+  template QuestionnaireTemplate @relation(fields: [templateId], references: [id])
+  answers  Answer[]
+
+  @@unique([sessionId, templateId])
+  @@index([sessionId])
+  @@map("questionnaire_responses")
+}
+
+model Answer {
+  id          String   @id @default(cuid())
+  responseId  String
+  questionId  String
+  textValue   String?
+  numberValue Int?
+  jsonValue   Json?
+  fileKeys    String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  response QuestionnaireResponse @relation(fields: [responseId], references: [id])
+  question Question              @relation(fields: [questionId], references: [id])
+
+  @@unique([responseId, questionId])
+  @@index([responseId])
+  @@map("answers")
+}
+
+// ─────────────────────────────────────────
+// PROJECTS
+// ─────────────────────────────────────────
+
+model Project {
+  id               String        @id @default(cuid())
+  companyId        String
+  name             String
+  slug             String
+  description      String?
+  status           ProjectStatus @default(DISCOVERY)
+  startDate        DateTime?
+  endDate          DateTime?
+  estimatedEndDate DateTime?
+  leadUserId       String?
+  createdById      String
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  company         Company             @relation(fields: [companyId], references: [id])
+  memberships     ProjectMembership[]
+  milestones      Milestone[]
+  messages        Message[]
+  documents       Document[]
+  documentFolders DocumentFolder[]
+  invoices        Invoice[]
+  agreements      Agreement[]
+  internalNotes   InternalNote[]
+  auditLogs       AuditLog[]
+
+  @@unique([companyId, slug])
+  @@index([companyId])
+  @@index([status])
+  @@map("projects")
+}
+
+model ProjectMembership {
+  id        String                @id @default(cuid())
+  projectId String
+  userId    String
+  role      ProjectMembershipRole
+  addedById String?
+
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_memberships")
+}
+
+// ─────────────────────────────────────────
+// MILESTONES
+// ─────────────────────────────────────────
+
+model Milestone {
+  id          String          @id @default(cuid())
+  projectId   String
+  name        String
+  description String?
+  status      MilestoneStatus @default(PENDING)
+  dueDate     DateTime?
+  completedAt DateTime?
+  sortOrder   Int             @default(0)
+  createdById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project             @relation(fields: [projectId], references: [id])
+  approvals MilestoneApproval[]
+
+  @@index([projectId])
+  @@index([status])
+  @@map("milestones")
+}
+
+model MilestoneApproval {
+  id            String          @id @default(cuid())
+  milestoneId   String
+  requestedById String
+  reviewedById  String?
+  status        MilestoneStatus
+  completionNote String?
+  reviewComment  String?
+  requestedAt   DateTime        @default(now())
+  reviewedAt    DateTime?
+
+  milestone   Milestone @relation(fields: [milestoneId], references: [id])
+  requestedBy User      @relation("RequestedBy", fields: [requestedById], references: [id])
+
+  @@index([milestoneId])
+  @@map("milestone_approvals")
+}
+
+// ─────────────────────────────────────────
+// MESSAGING
+// ─────────────────────────────────────────
+
+model Message {
+  id               String   @id @default(cuid())
+  projectId        String
+  senderId         String
+  content          String
+  isInternal       Boolean  @default(false)
+  mentionedUserIds String[] @default([])
+  parentMessageId  String?
+  deletedContent   String?  @default("[message deleted]")
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  project     Project            @relation(fields: [projectId], references: [id])
+  sender      User               @relation(fields: [senderId], references: [id])
+  attachments MessageAttachment[]
+
+  @@index([projectId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@index([isInternal])
+  @@map("messages")
+}
+
+model MessageAttachment {
+  id        String @id @default(cuid())
+  messageId String
+  fileKey   String
+  fileName  String
+  fileSize  Int
+  mimeType  String
+
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id])
+
+  @@index([messageId])
+  @@map("message_attachments")
+}
+
+// ─────────────────────────────────────────
+// DOCUMENTS & STORAGE
+// ─────────────────────────────────────────
+
+model DocumentFolder {
+  id             String              @id @default(cuid())
+  companyId      String
+  projectId      String?
+  name           String
+  parentFolderId String?
+  accessLevel    DocumentAccessLevel @default(CLIENT_VISIBLE)
+  createdById    String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company      Company         @relation(fields: [companyId], references: [id])
+  project      Project?        @relation(fields: [projectId], references: [id])
+  parentFolder DocumentFolder?  @relation("FolderChildren", fields: [parentFolderId], references: [id])
+  children     DocumentFolder[] @relation("FolderChildren")
+  documents    Document[]
+
+  @@index([companyId])
+  @@index([projectId])
+  @@map("document_folders")
+}
+
+model Document {
+  id               String              @id @default(cuid())
+  companyId        String
+  projectId        String?
+  folderId         String?
+  name             String
+  description      String?
+  fileKey          String
+  fileName         String
+  fileSize         Int
+  mimeType         String
+  version          Int                 @default(1)
+  parentDocumentId String?
+  uploadedById     String
+  accessLevel      DocumentAccessLevel @default(INTERNAL)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  company        Company         @relation(fields: [companyId], references: [id])
+  project        Project?        @relation(fields: [projectId], references: [id])
+  folder         DocumentFolder? @relation(fields: [folderId], references: [id])
+  uploadedBy     User            @relation(fields: [uploadedById], references: [id])
+  parentDocument Document?       @relation("DocumentVersions", fields: [parentDocumentId], references: [id])
+  versions       Document[]      @relation("DocumentVersions")
+  agreement      Agreement?
+
+  @@index([companyId])
+  @@index([projectId])
+  @@index([accessLevel])
+  @@map("documents")
+}
+
+// ─────────────────────────────────────────
+// AGREEMENTS
+// ─────────────────────────────────────────
+
+model Agreement {
+  id          String          @id @default(cuid())
+  companyId   String
+  projectId   String?
+  documentId  String          @unique
+  title       String
+  description String?
+  status      AgreementStatus @default(DRAFT)
+  createdById String
+  expiresAt   DateTime?
+  sentAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company      Company                @relation(fields: [companyId], references: [id])
+  project      Project?               @relation(fields: [projectId], references: [id])
+  document     Document               @relation(fields: [documentId], references: [id])
+  auditRecords AgreementAuditRecord[]
+
+  @@index([companyId])
+  @@index([status])
+  @@map("agreements")
+}
+
+model AgreementAuditRecord {
+  id               String   @id @default(cuid())
+  agreementId      String
+  userId           String
+  acknowledgedName String
+  documentHash     String
+  ipAddress        String
+  userAgent        String
+  acknowledgedAt   DateTime @default(now())
+
+  agreement Agreement @relation(fields: [agreementId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([agreementId])
+  @@map("agreement_audit_records")
+}
+
+// ─────────────────────────────────────────
+// BILLING / INVOICES
+// ─────────────────────────────────────────
+
+model Invoice {
+  id                String        @id @default(cuid())
+  companyId         String
+  projectId         String?
+  invoiceNumber     String        @unique
+  title             String
+  amountCents       Int
+  currency          String        @default("USD")
+  status            InvoiceStatus @default(DRAFT)
+  dueDate           DateTime?
+  issuedAt          DateTime?
+  paidAt            DateTime?
+  fileKey           String?
+  lineItems         Json?
+  notes             String?
+  externalPaymentId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company  @relation(fields: [companyId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id])
+
+  @@index([companyId])
+  @@index([status])
+  @@index([invoiceNumber])
+  @@map("invoices")
+}
+
+// ─────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────
+
+model Notification {
+  id        String              @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  data      Json
+  isRead    Boolean             @default(false)
+  readAt    DateTime?
+  channel   NotificationChannel @default(IN_APP)
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id               String  @id @default(cuid())
+  userId           String  @unique
+  emailOnMessage   Boolean @default(true)
+  emailOnMilestone Boolean @default(true)
+  emailOnKYC       Boolean @default(true)
+  emailOnInvoice   Boolean @default(true)
+  emailOnAgreement Boolean @default(true)
+  emailOnProject   Boolean @default(true)
+
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("notification_preferences")
+}
+
+// ─────────────────────────────────────────
+// AI OUTPUTS
+// ─────────────────────────────────────────
+
+model AIOutput {
+  id            String         @id @default(cuid())
+  entityType    String
+  entityId      String
+  outputType    AIOutputType
+  status        AIOutputStatus @default(PENDING)
+  content       Json?
+  rawText       String?
+  model         String
+  promptVersion String?
+  inputTokens   Int?
+  outputTokens  Int?
+  humanOverride Json?
+  isOverridden  Boolean        @default(false)
+  createdById   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Typed relations for the two entity types this currently covers
+  kycSubmissionId    String?
+  onboardingSessionId String?
+
+  createdBy       User?              @relation("CreatedByUser", fields: [createdById], references: [id])
+  kycSubmission   KYCSubmission?     @relation(fields: [kycSubmissionId], references: [id])
+  onboardingSession OnboardingSession? @relation(fields: [onboardingSessionId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([outputType])
+  @@map("ai_outputs")
+}
+
+// ─────────────────────────────────────────
+// ADMIN CRM
+// ─────────────────────────────────────────
+
+model InternalNote {
+  id        String  @id @default(cuid())
+  companyId String?
+  projectId String?
+  authorId  String
+  content   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company? @relation(fields: [companyId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id])
+  author  User     @relation(fields: [authorId], references: [id])
+
+  @@index([companyId])
+  @@index([projectId])
+  @@map("internal_notes")
+}
+
+model CustomRequest {
+  id          String   @id @default(cuid())
+  companyId   String
+  userId      String
+  description String
+  goals       String?
+  budget      String?
+  timeline    String?
+  fileKeys    String[] @default([])
+  status      String   @default("PENDING_REVIEW")
+  projectId   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
+  @@map("custom_requests")
+}
+
+// ─────────────────────────────────────────
+// AUDIT LOG (INSERT-ONLY)
+// ─────────────────────────────────────────
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  userId     String?
+  companyId  String?
+  projectId  String?
+  kycSubmissionId String?
+  entityType String
+  entityId   String
+  action     AuditAction
+  before     Json?
+  after      Json?
+  ipAddress  String?
+  userAgent  String?
+
+  createdAt DateTime @default(now())
+
+  user          User?          @relation(fields: [userId], references: [id])
+  company       Company?       @relation(fields: [companyId], references: [id])
+  project       Project?       @relation(fields: [projectId], references: [id])
+  kycSubmission KYCSubmission? @relation(fields: [kycSubmissionId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([companyId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

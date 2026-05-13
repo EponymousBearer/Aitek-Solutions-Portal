@@ -1,0 +1,18 @@
+{
+  "name": "@aitek/types",
+  "version": "0.0.1",
+  "private": true,
+  "license": "UNLICENSED",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@aitek/tsconfig": "*",
+    "typescript": "^5.4.0"
+  }
+}
