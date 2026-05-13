@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['@aitek/ui', '@aitek/types', '@aitek/config', '@aitek/workflows'],
+  transpilePackages: ['@aitek/ui', '@aitek/config', '@aitek/workflows'],
   images: {
     remotePatterns: [
       {
