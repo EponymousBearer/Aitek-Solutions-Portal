@@ -22,6 +22,9 @@ RUN npm ci --workspace=apps/api --include-workspace-root
 COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
 
+# Build internal workspace packages so their dist/ exists at runtime
+RUN npm run build -w packages/types
+
 # Generate Prisma client
 RUN cd apps/api && npx prisma generate
 
@@ -42,6 +45,8 @@ COPY --from=builder /app/apps/api/prisma.config.ts ./prisma.config.ts
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=builder /app/apps/api/package.json ./package.json
+# Copy built internal packages so node_modules workspace symlinks resolve
+COPY --from=builder /app/packages/types ./packages/types
 
 EXPOSE 3001
 

@@ -1,0 +1,36 @@
+# Dependencies — never send to Docker, each stage runs npm ci
+**/node_modules
+
+# Build artifacts — rebuilt inside Docker
+**/.next
+**/dist
+**/.turbo
+**/build
+**/out
+
+# Git
+.git
+.gitignore
+
+# Local env files — secrets stay off the image
+.env
+.env.local
+**/.env.local
+**/.env.*.local
+
+# Dev tools
+.vscode
+.idea
+**/*.log
+
+# Planning and docs
+planning/
+
+# Docker files themselves
+docker-compose*.yml
+.dockerignore
+Dockerfile*
+
+# Test artifacts
+**/coverage
+**/.nyc_output
