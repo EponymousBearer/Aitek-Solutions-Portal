@@ -25,6 +25,9 @@ COPY apps/web/ ./apps/web/
 # Build Next.js (standalone output)
 RUN cd apps/web && npm run build
 
+# Ensure public dir exists (may be empty if no static assets added yet)
+RUN mkdir -p /app/apps/web/public
+
 # Stage 2: Runner
 FROM node:20-alpine AS runner
 
