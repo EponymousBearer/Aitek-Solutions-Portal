@@ -22,6 +22,9 @@ RUN npm ci --workspace=apps/web --include-workspace-root
 COPY packages/ ./packages/
 COPY apps/web/ ./apps/web/
 
+# Build internal workspace packages so their dist/ exists before Next.js resolves them
+RUN npm run build -w packages/types
+
 # Build Next.js (standalone output)
 RUN cd apps/web && npm run build
 
