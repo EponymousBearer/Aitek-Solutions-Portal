@@ -8,23 +8,26 @@ export const api = axios.create({
   withCredentials: false,
 })
 
-// Attach Clerk JWT on every request (token injected by the auth provider)
+type ClerkWindow = Window & {
+  Clerk?: {
+    session?: {
+      getToken: (options?: { template?: string }) => Promise<string | null>
+    }
+  }
+}
+
 api.interceptors.request.use(async (config) => {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && !config.headers['Authorization']) {
     try {
-      // Clerk exposes getToken on the window via ClerkJS
-      // This is replaced with the proper clerk hook in Prompt 5
-      const token =
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        typeof (window as any).__clerk_getToken === 'function'
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ? await (window as any).__clerk_getToken()
-          : null
+      const clerkWindow = window as ClerkWindow
+      const token = clerkWindow.Clerk?.session?.getToken
+        ? await clerkWindow.Clerk.session.getToken()
+        : null
       if (token) {
         config.headers['Authorization'] = `Bearer ${token}`
       }
     } catch {
-      // no-op — unauthenticated request
+      // unauthenticated — let the request proceed without a token
     }
   }
   return config
@@ -33,9 +36,18 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    if (error.response?.status === 401) {
-      // Will be handled by Clerk redirect in Prompt 5
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'response' in error &&
+      typeof error.response === 'object' &&
+      error.response !== null &&
+      'status' in error.response &&
+      error.response.status === 401
+    ) {
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/sign-in')) {
+        window.location.href = `/sign-in?redirect_url=${encodeURIComponent(window.location.href)}`
+      }
     }
     return Promise.reject(error)
   },
