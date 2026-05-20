@@ -1,13 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { useAuth } from '@clerk/nextjs'
-import { Building2, Check, Globe, Loader2, Users } from 'lucide-react'
 
-import { createCompanySchema, type CreateCompanyInput } from '@aitek/types'
+import { useRouter } from 'next/navigation'
+
+import { type CreateCompanyInput, createCompanySchema } from '@aitek/types'
+import { useAuth } from '@clerk/nextjs'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { Building2, Check, Globe, Loader2, Users } from 'lucide-react'
+import { useForm } from 'react-hook-form'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'

@@ -1,10 +1,8 @@
 'use client'
 
+import { type AuthUser, CompanyMembershipRole, UserRole } from '@aitek/types'
 import { useAuth } from '@clerk/nextjs'
 import { useQuery } from '@tanstack/react-query'
-
-import type { AuthUser } from '@aitek/types'
-import { UserRole, CompanyMembershipRole } from '@aitek/types'
 
 import { api } from '@/lib/api'
 
