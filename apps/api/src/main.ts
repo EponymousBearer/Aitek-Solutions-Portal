@@ -11,7 +11,7 @@ import { ClerkAuthGuard } from './common/guards/clerk-auth.guard'
 import { RolesGuard } from './common/guards/roles.guard'
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule)
+  const app = await NestFactory.create(AppModule, { rawBody: true })
 
   const reflector = app.get(Reflector)
 
