@@ -7,6 +7,7 @@ import * as Joi from 'joi'
 
 import { HealthModule } from './modules/health/health.module'
 import { AuthModule } from './modules/auth/auth.module'
+import { CompaniesModule } from './modules/companies/companies.module'
 import { PrismaModule } from './prisma/prisma.module'
 
 @Module({
@@ -20,6 +21,7 @@ import { PrismaModule } from './prisma/prisma.module'
         DATABASE_URL: Joi.string().required(),
         CLERK_SECRET_KEY: Joi.string().required(),
         CLERK_WEBHOOK_SECRET: Joi.string().required(),
+        JWT_SECRET: Joi.string().required(),
         NEXT_PUBLIC_APP_URL: Joi.string().default('http://localhost:3000'),
       }),
       validationOptions: { allowUnknown: true },
@@ -35,6 +37,7 @@ import { PrismaModule } from './prisma/prisma.module'
     PrismaModule,
     HealthModule,
     AuthModule,
+    CompaniesModule,
   ],
 })
 export class AppModule {}
