@@ -51,3 +51,6 @@ apps/api/prisma/migrations/**/migration.sql
 .claude
 .turbo
 /planning
+
+# Graphify
+graphify-out

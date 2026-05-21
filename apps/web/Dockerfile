@@ -25,6 +25,14 @@ COPY apps/web/ ./apps/web/
 # Build internal workspace packages so their dist/ exists before Next.js resolves them
 RUN npm run build -w packages/types
 
+# Build-time public env vars (NEXT_PUBLIC_* must be baked in at next build time)
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+
 # Build Next.js (standalone output)
 RUN cd apps/web && npm run build
 

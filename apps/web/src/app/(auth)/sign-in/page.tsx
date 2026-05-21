@@ -2,9 +2,29 @@ import type { Metadata } from 'next'
 
 import { SignIn } from '@clerk/nextjs'
 
+import { TokenSignIn } from '@/components/auth/token-sign-in'
+
 export const metadata: Metadata = { title: 'Sign In' }
 
-export default function SignInPage() {
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ token?: string }>
+}) {
+  const { token } = await searchParams
+
+  if (token) {
+    return (
+      <div className="flex flex-col items-center gap-6">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Welcome back</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Signing in to your AiTek Portal account</p>
+        </div>
+        <TokenSignIn token={token} />
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col items-center gap-6">
       <div className="text-center">

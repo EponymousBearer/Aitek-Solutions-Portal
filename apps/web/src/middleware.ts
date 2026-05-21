@@ -20,12 +20,12 @@ export default clerkMiddleware(async (auth, req) => {
   // Public routes — allow unauthenticated access
   if (isPublicRoute(req)) {
     // Redirect signed-in users away from auth pages
-    if (
-      userId &&
-      (req.nextUrl.pathname.startsWith('/sign-in') ||
-        req.nextUrl.pathname.startsWith('/sign-up'))
-    ) {
+    if (userId && req.nextUrl.pathname.startsWith('/sign-in')) {
       return NextResponse.redirect(new URL('/portal', req.url))
+    }
+    // After sign-up (including email verification), send new users to onboarding
+    if (userId && req.nextUrl.pathname.startsWith('/sign-up')) {
+      return NextResponse.redirect(new URL('/onboarding/company', req.url))
     }
     return NextResponse.next()
   }
