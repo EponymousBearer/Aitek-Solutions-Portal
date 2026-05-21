@@ -20,8 +20,12 @@ api.interceptors.request.use(async (config) => {
   if (typeof window !== 'undefined' && !config.headers['Authorization']) {
     try {
       const clerkWindow = window as ClerkWindow
-      const token = clerkWindow.Clerk?.session?.getToken
-        ? await clerkWindow.Clerk.session.getToken()
+      // Use the "aitek-portal-default" JWT template configured in Clerk
+      // (planning/25 §1 Phase A). Falls back to the default session token if
+      // the template is not yet configured.
+      const tokenFn = clerkWindow.Clerk?.session?.getToken
+      const token = tokenFn
+        ? (await tokenFn({ template: 'aitek-portal-default' }).catch(() => tokenFn()))
         : null
       if (token) {
         config.headers['Authorization'] = `Bearer ${token}`

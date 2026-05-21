@@ -5,15 +5,16 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { type CreateCompanyInput, createCompanySchema } from '@aitek/types'
-import { useAuth } from '@clerk/nextjs'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Building2, Check, Globe, Loader2, Users } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 
+import { BotBubble } from '@/components/onboarding/bot-bubble'
+import { ChatShell } from '@/components/onboarding/chat-shell'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { api } from '@/lib/api'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -126,17 +127,69 @@ function TagsInput({
   )
 }
 
+// ─── Stepper indicator ────────────────────────────────────────────────────────
+
+function Stepper({ step }: { step: number }) {
+  return (
+    <div className="flex items-center justify-between">
+      {STEPS.map((s, i) => (
+        <div key={s.id} className="flex flex-1 items-center">
+          <div className="flex flex-col items-center gap-1">
+            <div
+              className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition-colors ${
+                step > s.id
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : step === s.id
+                    ? 'border-primary text-primary'
+                    : 'border-muted text-muted-foreground'
+              }`}
+            >
+              {step > s.id ? <Check className="h-4 w-4" /> : <s.icon className="h-4 w-4" />}
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">{s.label}</span>
+          </div>
+          {i < STEPS.length - 1 && (
+            <div
+              className={`mx-2 h-0.5 flex-1 transition-colors ${step > s.id ? 'bg-primary' : 'bg-muted'}`}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
+
+interface ExistingCompany {
+  id: string
+  name: string
+  businessType: string | null
+  industry: string | null
+  employeeCount: string | null
+  country: string | null
+  state: string | null
+  website: string | null
+  socialLinks: { linkedin?: string; twitter?: string } | null
+  annualRevenueRange: string | null
+  yearsInBusiness: string | null
+  existingSoftwareStack: string[] | null
+}
 
 export default function CompanyPage() {
   const router = useRouter()
-  const { getToken } = useAuth()
+  const { isAdmin, isAitekTeam, isLoading: userLoading } = useCurrentUser()
+
+  useEffect(() => {
+    if (!userLoading && (isAdmin || isAitekTeam)) {
+      router.replace('/portal')
+    }
+  }, [userLoading, isAdmin, isAitekTeam, router])
 
   const [step, setStep] = useState(1)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
-  const [softwareStack, setSoftwareStack] = useState<string[]>([])
 
   const {
     register,
@@ -144,6 +197,7 @@ export default function CompanyPage() {
     setValue,
     watch,
     trigger,
+    reset,
     formState: { errors },
   } = useForm<CreateCompanyInput>({
     resolver: zodResolver(createCompanySchema),
@@ -153,38 +207,51 @@ export default function CompanyPage() {
     },
   })
 
-  // Check if user already has a company
+  // Prefill from server on mount. We do NOT redirect away — the wizard should
+  // be replayable so the user can finish steps 2/3 they may not have completed.
+  // PortalGuard handles "user already finished onboarding" cases.
   useEffect(() => {
     const fetchExisting = async () => {
       try {
-        const token = await getToken()
-        const res = await api.get<{ data: { id: string } }>('/companies/me', {
-          headers: { Authorization: `Bearer ${token}` },
+        const res = await api.get<{ data: ExistingCompany }>('/companies/me')
+        const c = res.data.data
+        setCompanyId(c.id)
+        reset({
+          name: c.name,
+          businessType: c.businessType ?? undefined,
+          industry: c.industry ?? undefined,
+          employeeCount: c.employeeCount ?? undefined,
+          country: c.country ?? undefined,
+          state: c.state ?? undefined,
+          website: c.website ?? '',
+          socialLinks: {
+            linkedin: c.socialLinks?.linkedin ?? '',
+            twitter: c.socialLinks?.twitter ?? '',
+          },
+          existingSoftwareStack: c.existingSoftwareStack ?? [],
+          annualRevenueRange: c.annualRevenueRange ?? undefined,
+          yearsInBusiness: c.yearsInBusiness ?? undefined,
         })
-        setCompanyId(res.data.data.id)
       } catch {
-        // No company yet — normal for new users
+        // No company yet — fine.
       }
     }
     void fetchExisting()
-  }, [getToken])
+  }, [reset])
 
   const autoSave = useCallback(
     async (data: Partial<CreateCompanyInput>) => {
       if (!companyId) return
       setAutoSaveStatus('saving')
       try {
-        const token = await getToken()
-        await api.put('/companies/me', data, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        await api.put('/companies/me', data)
         setAutoSaveStatus('saved')
         setTimeout(() => setAutoSaveStatus('idle'), 2000)
       } catch {
         setAutoSaveStatus('idle')
       }
     },
-    [companyId, getToken],
+    [companyId],
   )
 
   const handleStep1 = async () => {
@@ -193,16 +260,11 @@ export default function CompanyPage() {
 
     setSaving(true)
     try {
-      const token = await getToken()
       const values = watch()
       if (companyId) {
-        await api.put('/companies/me', values, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        await api.put('/companies/me', values)
       } else {
-        const res = await api.post<{ data: { id: string } }>('/companies', values, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const res = await api.post<{ data: { id: string } }>('/companies', values)
         setCompanyId(res.data.data.id)
       }
       setStep(2)
@@ -226,12 +288,7 @@ export default function CompanyPage() {
   const handleStep3 = handleSubmit(async (data) => {
     setSaving(true)
     try {
-      const token = await getToken()
-      await api.put(
-        '/companies/me',
-        { ...data, existingSoftwareStack: softwareStack },
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
+      await api.put('/companies/me', data)
       router.push('/onboarding/kyc')
     } catch (err) {
       console.error(err)
@@ -241,50 +298,40 @@ export default function CompanyPage() {
   })
 
   return (
-    <div className="mx-auto max-w-xl space-y-8">
-      {/* Stepper */}
-      <div className="flex items-center justify-between">
-        {STEPS.map((s, i) => (
-          <div key={s.id} className="flex flex-1 items-center">
-            <div className="flex flex-col items-center gap-1">
-              <div
-                className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition-colors ${
-                  step > s.id
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : step === s.id
-                      ? 'border-primary text-primary'
-                      : 'border-muted text-muted-foreground'
-                }`}
-              >
-                {step > s.id ? <Check className="h-4 w-4" /> : <s.icon className="h-4 w-4" />}
-              </div>
-              <span className="text-xs font-medium text-muted-foreground">{s.label}</span>
-            </div>
-            {i < STEPS.length - 1 && (
-              <div
-                className={`mx-2 h-0.5 flex-1 transition-colors ${step > s.id ? 'bg-primary' : 'bg-muted'}`}
-              />
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Auto-save indicator */}
-      {autoSaveStatus !== 'idle' && (
-        <p className="text-center text-xs text-muted-foreground">
-          {autoSaveStatus === 'saving' ? (
-            <span className="flex items-center justify-center gap-1">
-              <Loader2 className="h-3 w-3 animate-spin" /> Saving…
-            </span>
-          ) : (
-            'Saved'
-          )}
-        </p>
+    <ChatShell currentStep="company">
+      {step === 1 && (
+        <BotBubble>
+          Hi! I'm here to set up your AiTek workspace. First, tell me a bit about your company.
+        </BotBubble>
+      )}
+      {step === 2 && (
+        <BotBubble>
+          Got it. Want to add LinkedIn or X links? Helpful for our team but totally optional.
+        </BotBubble>
+      )}
+      {step === 3 && (
+        <BotBubble>
+          Last few details — these help us scope projects accurately. All optional, but every
+          field helps.
+        </BotBubble>
       )}
 
-      <Card>
-        <CardContent className="pt-6">
-          {/* ── Step 1: Company basics ── */}
+      <div className="rounded-2xl border bg-background p-5 shadow-sm">
+        <Stepper step={step} />
+
+        {autoSaveStatus !== 'idle' && (
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            {autoSaveStatus === 'saving' ? (
+              <span className="inline-flex items-center justify-center gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" /> Saving…
+              </span>
+            ) : (
+              'Saved'
+            )}
+          </p>
+        )}
+
+        <div className="mt-6">
           {step === 1 && (
             <form
               onSubmit={(e) => {
@@ -293,8 +340,6 @@ export default function CompanyPage() {
               }}
               className="space-y-4"
             >
-              <h2 className="text-lg font-semibold">Tell us about your company</h2>
-
               <div className="space-y-1.5">
                 <Label htmlFor="name">
                   Company name <span className="text-destructive">*</span>
@@ -306,19 +351,11 @@ export default function CompanyPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="businessType">Business type</Label>
-                  <Input
-                    id="businessType"
-                    {...register('businessType')}
-                    placeholder="LLC, Corp…"
-                  />
+                  <Input id="businessType" {...register('businessType')} placeholder="LLC, Corp…" />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="industry">Industry</Label>
-                  <Input
-                    id="industry"
-                    {...register('industry')}
-                    placeholder="Healthcare, Finance…"
-                  />
+                  <Input id="industry" {...register('industry')} placeholder="Healthcare, Finance…" />
                 </div>
               </div>
 
@@ -359,7 +396,6 @@ export default function CompanyPage() {
             </form>
           )}
 
-          {/* ── Step 2: Online presence ── */}
           {step === 2 && (
             <form
               onSubmit={(e) => {
@@ -368,11 +404,6 @@ export default function CompanyPage() {
               }}
               className="space-y-4"
             >
-              <h2 className="text-lg font-semibold">Online presence</h2>
-              <p className="text-sm text-muted-foreground">
-                Optional — helps us understand your brand.
-              </p>
-
               <div className="space-y-1.5">
                 <Label htmlFor="linkedin">LinkedIn</Label>
                 <Input
@@ -408,14 +439,8 @@ export default function CompanyPage() {
             </form>
           )}
 
-          {/* ── Step 3: Financial + tech context ── */}
           {step === 3 && (
             <form onSubmit={handleStep3} className="space-y-4">
-              <h2 className="text-lg font-semibold">Financial & technology context</h2>
-              <p className="text-sm text-muted-foreground">
-                Helps us scope your project accurately.
-              </p>
-
               <div className="space-y-1.5">
                 <Label>Annual revenue range</Label>
                 <NativeSelect
@@ -442,8 +467,8 @@ export default function CompanyPage() {
                   List tools, platforms, or languages you use.
                 </p>
                 <TagsInput
-                  value={softwareStack}
-                  onChange={setSoftwareStack}
+                  value={watch('existingSoftwareStack') ?? []}
+                  onChange={(tags) => setValue('existingSoftwareStack', tags)}
                   placeholder="e.g. Salesforce, React, AWS…"
                 />
               </div>
@@ -459,13 +484,13 @@ export default function CompanyPage() {
                 </Button>
                 <Button type="submit" className="flex-1" disabled={saving}>
                   {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Continue to KYC
+                  Continue to identity verification
                 </Button>
               </div>
             </form>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </div>
+    </ChatShell>
   )
 }
