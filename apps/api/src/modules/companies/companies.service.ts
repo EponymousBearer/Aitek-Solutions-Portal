@@ -10,12 +10,14 @@ import type { AuthUser, CreateCompanyInput, UpdateCompanyInput } from '@aitek/ty
 
 import { PrismaService } from '../../prisma/prisma.service'
 import { AuthService } from '../auth/auth.service'
+import { ClerkMetadataSyncService } from '../auth/clerk-metadata-sync.service'
 
 @Injectable()
 export class CompaniesService {
   constructor(
     private prisma: PrismaService,
     private authService: AuthService,
+    private metadataSync: ClerkMetadataSyncService,
   ) {}
 
   async createCompany(input: CreateCompanyInput, user: AuthUser) {
@@ -26,8 +28,8 @@ export class CompaniesService {
 
     const slug = this.generateSlug(input.name)
 
-    return this.prisma.$transaction(async (tx) => {
-      const company = await tx.company.create({
+    const company = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.company.create({
         data: {
           name: input.name,
           slug,
@@ -41,20 +43,33 @@ export class CompaniesService {
           existingSoftwareStack: input.existingSoftwareStack ?? undefined,
           annualRevenueRange: input.annualRevenueRange,
           yearsInBusiness: input.yearsInBusiness,
+          // Stub: real trigger moves to KYC approval in Prompt 6 (see
+          // planning/25 §1 decision 4). For today, granting portal access
+          // on company create unblocks the onboarding chain.
+          portalAccessGranted: true,
         },
       })
 
       await tx.companyMembership.create({
         data: {
           userId: user.id,
-          companyId: company.id,
+          companyId: created.id,
           role: CompanyMembershipRole.CLIENT_ADMIN,
           isActive: true,
         },
       })
 
-      return company
+      return created
     })
+
+    // Sync claims AFTER the DB transaction commits so the network call doesn't
+    // hold a Postgres lock.
+    await this.metadataSync.sync(user.clerkId, {
+      companyId: company.id,
+      companyMembershipRole: CompanyMembershipRole.CLIENT_ADMIN,
+    })
+
+    return company
   }
 
   async getMyCompany(user: AuthUser) {
