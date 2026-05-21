@@ -1,9 +1,10 @@
+import type { AuthUser } from '@aitek/types'
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common'
 
-import type { AuthUser } from '@aitek/types'
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { ClerkAuthGuard } from '../../common/guards/clerk-auth.guard'
+
 import { OnboardingService } from './onboarding.service'
 
 interface SetServicesBody {

@@ -115,7 +115,7 @@ export default function KycPage() {
     return (
       <ChatShell currentStep="kyc">
         <BotBubble>
-          Your identity verification is in review. We'll take it from here — you can continue to
+          Your identity verification is in review. We&apos;ll take it from here &mdash; you can continue to
           the next step.
         </BotBubble>
         <div className="flex justify-end pt-2">
@@ -129,7 +129,7 @@ export default function KycPage() {
     <ChatShell currentStep="kyc">
       <BotBubble>
         Nice — your company profile is saved. Before we open the portal, we need to verify your
-        business identity. It's quick.
+        business identity. It&apos;s quick.
       </BotBubble>
 
       <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
@@ -210,7 +210,7 @@ export default function KycPage() {
       {allRequiredUploaded && (
         <>
           <UserBubble>All four documents uploaded</UserBubble>
-          <BotBubble>Submit for review and we'll take it from here.</BotBubble>
+          <BotBubble>Submit for review and we&apos;ll take it from here.</BotBubble>
           <div className="flex justify-end pt-2">
             <Button onClick={handleSubmit} disabled={submitting}>
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

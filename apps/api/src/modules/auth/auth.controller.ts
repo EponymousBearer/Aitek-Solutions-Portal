@@ -1,3 +1,6 @@
+
+import { CompanyMembershipRole, UserRole } from '@aitek/types'
+import type { AuthUser } from '@aitek/types'
 import {
   BadRequestException,
   Body,
@@ -10,16 +13,14 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common'
-import { Webhook } from 'svix'
 import type { Request } from 'express'
+import { Webhook } from 'svix'
 
-import { CompanyMembershipRole, UserRole } from '@aitek/types'
-import type { AuthUser } from '@aitek/types'
-
-import { ClerkAuthGuard } from '../../common/guards/clerk-auth.guard'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { Public } from '../../common/decorators/public.decorator'
 import { Roles } from '../../common/decorators/roles.decorator'
+import { ClerkAuthGuard } from '../../common/guards/clerk-auth.guard'
+
 import { AuthService } from './auth.service'
 
 @Controller('auth')

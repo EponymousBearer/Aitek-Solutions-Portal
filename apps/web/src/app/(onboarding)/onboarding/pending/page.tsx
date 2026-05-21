@@ -11,13 +11,13 @@ export default function PendingPage() {
     <Card className="mx-auto max-w-md">
       <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
         <CheckCircle2 className="h-12 w-12 text-green-500" />
-        <h1 className="text-xl font-semibold">Thanks — we're reviewing your submission</h1>
+        <h1 className="text-xl font-semibold">Thanks &mdash; we&apos;re reviewing your submission</h1>
         <p className="text-sm text-muted-foreground">
-          Our team typically reviews KYC submissions within one business day. You'll get an email
-          when your portal access is ready.
+          Our team typically reviews KYC submissions within one business day. You&apos;ll get an
+          email when your portal access is ready.
         </p>
         <p className="text-xs text-muted-foreground">
-          You can safely close this window — no further action is needed right now.
+          You can safely close this window &mdash; no further action is needed right now.
         </p>
       </CardContent>
     </Card>

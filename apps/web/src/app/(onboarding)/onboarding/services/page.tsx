@@ -85,7 +85,7 @@ export default function ServicesPage() {
   return (
     <ChatShell currentStep="services">
       <BotBubble>
-        Great — your identity is being verified. Let's talk about what we can do for you.
+        Great &mdash; your identity is being verified. Let&apos;s talk about what we can do for you.
       </BotBubble>
       <BotBubble>
         Which services interest you? Pick as many as you like — your answers help us route you to

@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common'
-import { createClerkClient } from '@clerk/backend'
-
 import type { CompanyMembershipRole, UserRole } from '@aitek/types'
+import { createClerkClient } from '@clerk/backend'
+import { Injectable, Logger } from '@nestjs/common'
+
 
 interface PublicMetadataInput {
   role?: UserRole

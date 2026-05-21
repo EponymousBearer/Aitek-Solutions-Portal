@@ -1,14 +1,14 @@
-import { NestFactory, Reflector } from '@nestjs/core'
 import { ClassSerializerInterceptor } from '@nestjs/common'
+import { NestFactory, Reflector } from '@nestjs/core'
 import helmet from 'helmet'
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const compression = require('compression') as () => ReturnType<typeof import('compression')>
 
 import { AppModule } from './app.module'
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
-import { ResponseTransformInterceptor } from './common/interceptors/response-transform.interceptor'
 import { ClerkAuthGuard } from './common/guards/clerk-auth.guard'
 import { RolesGuard } from './common/guards/roles.guard'
+import { ResponseTransformInterceptor } from './common/interceptors/response-transform.interceptor'
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true })

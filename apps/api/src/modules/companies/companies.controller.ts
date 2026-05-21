@@ -1,10 +1,11 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common'
 
 import { CompanyMembershipRole } from '@aitek/types'
 import type { AuthUser, CreateCompanyInput, UpdateCompanyInput } from '@aitek/types'
+import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common'
 
-import { ClerkAuthGuard } from '../../common/guards/clerk-auth.guard'
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
+import { ClerkAuthGuard } from '../../common/guards/clerk-auth.guard'
+
 import { CompaniesService } from './companies.service'
 
 @Controller('companies')

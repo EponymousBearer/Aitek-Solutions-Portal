@@ -1,12 +1,12 @@
+
+import { CompanyMembershipRole } from '@aitek/types'
+import type { AuthUser, CreateCompanyInput, UpdateCompanyInput } from '@aitek/types'
 import {
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
-
-import { CompanyMembershipRole } from '@aitek/types'
-import type { AuthUser, CreateCompanyInput, UpdateCompanyInput } from '@aitek/types'
 
 import { PrismaService } from '../../prisma/prisma.service'
 import { AuthService } from '../auth/auth.service'

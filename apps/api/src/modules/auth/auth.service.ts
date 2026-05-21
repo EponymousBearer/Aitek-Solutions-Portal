@@ -1,3 +1,5 @@
+import { CompanyMembershipRole, KYCStatus, OnboardingStatus, UserRole } from '@aitek/types'
+import type { AuthUser } from '@aitek/types'
 import {
   BadRequestException,
   ConflictException,
@@ -7,10 +9,9 @@ import {
 } from '@nestjs/common'
 import * as jwt from 'jsonwebtoken'
 
-import { CompanyMembershipRole, KYCStatus, OnboardingStatus, UserRole } from '@aitek/types'
-import type { AuthUser } from '@aitek/types'
 
 import { PrismaService } from '../../prisma/prisma.service'
+
 import { ClerkMetadataSyncService } from './clerk-metadata-sync.service'
 
 interface InviteTokenPayload {

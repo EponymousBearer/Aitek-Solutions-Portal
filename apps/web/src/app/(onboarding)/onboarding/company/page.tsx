@@ -301,7 +301,7 @@ export default function CompanyPage() {
     <ChatShell currentStep="company">
       {step === 1 && (
         <BotBubble>
-          Hi! I'm here to set up your AiTek workspace. First, tell me a bit about your company.
+          Hi! I&apos;m here to set up your AiTek workspace. First, tell me a bit about your company.
         </BotBubble>
       )}
       {step === 2 && (
@@ -311,7 +311,7 @@ export default function CompanyPage() {
       )}
       {step === 3 && (
         <BotBubble>
-          Last few details — these help us scope projects accurately. All optional, but every
+          Last few details &mdash; these help us scope projects accurately. All optional, but every
           field helps.
         </BotBubble>
       )}

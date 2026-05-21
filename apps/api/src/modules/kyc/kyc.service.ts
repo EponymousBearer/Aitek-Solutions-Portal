@@ -1,7 +1,7 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 
 import { KYCDocumentCategory, KYCStatus } from '@aitek/types'
 import type { AuthUser } from '@aitek/types'
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 
 import { PrismaService } from '../../prisma/prisma.service'
 

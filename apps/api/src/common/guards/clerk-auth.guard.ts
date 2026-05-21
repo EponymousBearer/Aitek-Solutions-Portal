@@ -1,3 +1,6 @@
+import type { AuthUser } from '@aitek/types'
+import { UserRole, CompanyMembershipRole } from '@aitek/types'
+import { verifyToken } from '@clerk/backend'
 import {
   CanActivate,
   ExecutionContext,
@@ -5,10 +8,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
-import { verifyToken } from '@clerk/backend'
 
-import type { AuthUser } from '@aitek/types'
-import { UserRole, CompanyMembershipRole } from '@aitek/types'
 
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator'
 

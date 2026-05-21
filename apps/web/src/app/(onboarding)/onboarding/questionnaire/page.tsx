@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { useRouter } from 'next/navigation'
 
-import { QuestionType } from '@aitek/types'
+import type { QuestionType } from '@aitek/types'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 
@@ -90,7 +90,7 @@ export default function QuestionnairePage() {
     return undefined
   }, [template, isLoading])
 
-  const questions = template?.questions ?? []
+  const questions = useMemo(() => template?.questions ?? [], [template])
   const currentQuestion = useMemo(() => questions[currentIndex], [questions, currentIndex])
   const allDone = botReady && currentIndex >= questions.length && questions.length > 0
 
@@ -128,8 +128,8 @@ export default function QuestionnairePage() {
   return (
     <ChatShell currentStep="questionnaire">
       <BotBubble>
-        Last step. I'll ask a few questions about your project so we can scope it accurately. There
-        are no wrong answers — short replies are fine.
+        Last step. I&apos;ll ask a few questions about your project so we can scope it accurately. There
+        are no wrong answers &mdash; short replies are fine.
       </BotBubble>
 
       {!botReady && <TypingIndicator />}
@@ -167,8 +167,8 @@ export default function QuestionnairePage() {
       {allDone && (
         <>
           <BotBubble>
-            That's everything I need. Submit your responses to finish onboarding — you'll land in
-            the portal.
+            That&apos;s everything I need. Submit your responses to finish onboarding &mdash;
+            you&apos;ll land in the portal.
           </BotBubble>
           {submitError && <BotBubble className="text-destructive">{submitError}</BotBubble>}
           <div className="flex justify-end pt-2">

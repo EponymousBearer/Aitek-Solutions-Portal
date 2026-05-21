@@ -1,3 +1,6 @@
+
+import { OnboardingStatus } from '@aitek/types'
+import type { AuthUser } from '@aitek/types'
 import {
   BadRequestException,
   ForbiddenException,
@@ -5,9 +8,6 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common'
-
-import { OnboardingStatus } from '@aitek/types'
-import type { AuthUser } from '@aitek/types'
 
 import { PrismaService } from '../../prisma/prisma.service'
 
