@@ -8,6 +8,10 @@ import * as Joi from 'joi'
 import { HealthModule } from './modules/health/health.module'
 import { AuthModule } from './modules/auth/auth.module'
 import { CompaniesModule } from './modules/companies/companies.module'
+import { KycModule } from './modules/kyc/kyc.module'
+import { OnboardingModule } from './modules/onboarding/onboarding.module'
+import { QuestionnaireModule } from './modules/questionnaire/questionnaire.module'
+import { ServicesModule } from './modules/services/services.module'
 import { PrismaModule } from './prisma/prisma.module'
 
 @Module({
@@ -38,6 +42,10 @@ import { PrismaModule } from './prisma/prisma.module'
     HealthModule,
     AuthModule,
     CompaniesModule,
+    ServicesModule,
+    QuestionnaireModule,
+    OnboardingModule,
+    KycModule,
   ],
 })
 export class AppModule {}
