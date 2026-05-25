@@ -11,8 +11,6 @@ out
 *.tsbuildinfo
 
 # Environment files
-.env
-.env.local
 .env.development.local
 .env.test.local
 .env.production.local
@@ -55,3 +53,4 @@ apps/api/prisma/migrations/**/migration.sql
 
 # Graphify
 graphify-out
+config.bat

@@ -1,0 +1,71 @@
+# Hot-reload local dev stack — build once, then edits are live with no rebuild.
+#
+# Source is bind-mounted into the containers; the dev servers (`next dev`,
+# `nest start --watch`) recompile on save, so a file change shows up in the
+# browser in ~1s. Anonymous volumes keep the image's installed node_modules and
+# build artifacts from being shadowed by the host copies.
+#
+# Usage (preferred):
+#   .\scripts\dev-watch.ps1
+#
+# Or manually:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d web api postgres
+#
+#   web → http://localhost:3000   api → http://localhost:3001/api/v1
+#
+# NOTE: only apps/web and apps/api are bind-mounted. Editing a shared workspace
+# package (packages/*) still needs a rebuild, since those are consumed via their
+# built dist/.
+
+services:
+  web:
+    image: aitek-portal-web-dev
+    build:
+      target: dev
+    command: npm run dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+      # inotify events don't cross Windows/WSL2 bind mounts — poll instead.
+      - WATCHPACK_POLLING=true
+    volumes:
+      - ./apps/web:/app/apps/web
+      # Preserve the image's deps + build cache (don't let the host shadow them).
+      - /app/apps/web/node_modules
+      - /app/apps/web/.next
+    restart: unless-stopped
+
+  api:
+    image: aitek-portal-api-dev
+    build:
+      target: dev
+    command: npm run dev
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+      # Force polling watchers for bind-mounted source on Windows/WSL2.
+      - CHOKIDAR_USEPOLLING=true
+      - TSC_WATCHFILE=DynamicPriorityPolling
+      - TSC_WATCHDIRECTORY=DynamicPriorityPolling
+    volumes:
+      - ./apps/api:/app/apps/api
+      # Keep the image's installed deps + generated Prisma client.
+      - /app/apps/api/node_modules
+      # NOTE: dist is intentionally NOT a volume — nest --watch deletes its
+      # outDir on each rebuild, and you can't rmdir a mount point (EBUSY). It
+      # lives inside the bind mount, which nest can clean as a normal subdir.
+    restart: unless-stopped
+
+  # Reuse the dev image (built by the `api` service) for one-off migrate runs.
+  migrate:
+    image: aitek-portal-api-dev
+
+  postgres:
+    ports:
+      - "5433:5432"

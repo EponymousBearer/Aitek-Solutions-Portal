@@ -28,7 +28,20 @@ RUN npm run build -w packages/types
 # Generate Prisma client
 RUN cd apps/api && npx prisma generate
 
-# Build the NestJS app
+# ─── Stage: Dev (hot-reload via nest --watch) ─────────────────────────────────
+# Used by docker-compose.dev.yml. Source is bind-mounted over /app/apps/api at
+# runtime, so this image only needs deps + the generated Prisma client; the
+# NestJS build is skipped (the watcher compiles on the fly).
+FROM builder AS dev
+
+ENV NODE_ENV=development
+WORKDIR /app/apps/api
+EXPOSE 3001
+CMD ["npm", "run", "dev"]
+
+# ─── Stage: Build (production NestJS compile) ─────────────────────────────────
+FROM builder AS build
+
 RUN cd apps/api && npm run build
 
 # ─── Stage 2: Runner ──────────────────────────────────────────────────────────
@@ -39,14 +52,17 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Copy only production dependencies and built output
-COPY --from=builder /app/apps/api/dist ./dist
-COPY --from=builder /app/apps/api/prisma ./prisma
-COPY --from=builder /app/apps/api/prisma.config.ts ./prisma.config.ts
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
-COPY --from=builder /app/apps/api/package.json ./package.json
+COPY --from=build /app/apps/api/dist ./dist
+COPY --from=build /app/apps/api/prisma ./prisma
+COPY --from=build /app/apps/api/prisma.config.ts ./prisma.config.ts
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=build /app/apps/api/package.json ./package.json
+# tsconfig is needed at runtime so ts-node can load prisma/seed.ts via
+# `npm run seed`. Without it ts-node bails with TS5083.
+COPY --from=build /app/apps/api/tsconfig.json ./tsconfig.json
 # Copy built internal packages so node_modules workspace symlinks resolve
-COPY --from=builder /app/packages/types ./packages/types
+COPY --from=build /app/packages/types ./packages/types
 
 EXPOSE 3001
 
