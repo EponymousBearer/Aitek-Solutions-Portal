@@ -1,0 +1,4 @@
+# Shell scripts must use LF so they run on the Linux VPS (this repo is checked
+# out on Windows with autocrlf, which would otherwise give them CRLF endings
+# and break bash with `\r` errors).
+*.sh text eol=lf

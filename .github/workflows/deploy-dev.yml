@@ -1,0 +1,39 @@
+name: Deploy dev to VPS
+
+# Auto-deploy every push to `dev` onto the Hostinger VPS that serves
+# dev.portal.aitek-solutions.com. Can also be run manually from the Actions tab.
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+# Never let two deploys run at once; let an in-flight deploy finish.
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & deploy on VPS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          if [ -z "$VPS_HOST" ] || [ -z "$VPS_USER" ] || [ -z "$VPS_SSH_KEY" ]; then
+            echo "::error::Missing secrets VPS_HOST / VPS_USER / VPS_SSH_KEY. Add them under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+          # Sync the repo on the VPS to the latest scripts, then run the deploy.
+          # (deploy.sh re-syncs to origin/dev itself, builds, migrates, restarts.)
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/aitek-portal && git fetch origin dev && git checkout -f dev && git reset --hard origin/dev && bash scripts/deploy.sh dev'
