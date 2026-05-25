@@ -47,7 +47,12 @@ export class OnboardingService {
       include: {
         responses: {
           include: {
-            answers: true,
+            answers: {
+              include: {
+                question: { select: { id: true, text: true, sortOrder: true } },
+              },
+              orderBy: { question: { sortOrder: 'asc' } },
+            },
             template: { select: { id: true, name: true } },
           },
         },

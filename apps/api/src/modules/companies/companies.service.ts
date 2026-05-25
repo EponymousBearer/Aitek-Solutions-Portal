@@ -1,5 +1,5 @@
 
-import { CompanyMembershipRole } from '@aitek/types'
+import { CompanyMembershipRole, OnboardingStatus, UserRole } from '@aitek/types'
 import type { AuthUser, CreateCompanyInput, UpdateCompanyInput } from '@aitek/types'
 import {
   ConflictException,
@@ -11,6 +11,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service'
 import { AuthService } from '../auth/auth.service'
 import { ClerkMetadataSyncService } from '../auth/clerk-metadata-sync.service'
+import { EmailService } from '../notifications/email.service'
 
 @Injectable()
 export class CompaniesService {
@@ -18,7 +19,75 @@ export class CompaniesService {
     private prisma: PrismaService,
     private authService: AuthService,
     private metadataSync: ClerkMetadataSyncService,
+    private emailService: EmailService,
   ) {}
+
+  // ─── Admin: pending-approval queue ─────────────────────────────────────────
+
+  private assertAitekTeam(user: AuthUser): void {
+    if (user.role !== UserRole.AITEK_ADMIN && user.role !== UserRole.AITEK_TEAM_MEMBER) {
+      throw new ForbiddenException('AiTek team access required')
+    }
+  }
+
+  async listPendingApprovals(user: AuthUser) {
+    this.assertAitekTeam(user)
+
+    return this.prisma.company.findMany({
+      where: {
+        portalAccessGranted: false,
+        onboardingSessions: { some: { status: OnboardingStatus.COMPLETED } },
+      },
+      include: {
+        memberships: {
+          where: { isActive: true, role: CompanyMembershipRole.CLIENT_ADMIN },
+          take: 1,
+          include: {
+            user: {
+              select: { id: true, email: true, firstName: true, lastName: true },
+            },
+          },
+        },
+        _count: { select: { selectedServices: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+  }
+
+  async approveCompany(companyId: string, user: AuthUser) {
+    this.assertAitekTeam(user)
+
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      include: {
+        memberships: {
+          where: { isActive: true, role: CompanyMembershipRole.CLIENT_ADMIN },
+          take: 1,
+          include: {
+            user: { select: { id: true, email: true, firstName: true } },
+          },
+        },
+      },
+    })
+    if (!company) throw new NotFoundException('Company not found')
+    if (company.portalAccessGranted) {
+      throw new ConflictException('Company is already approved')
+    }
+
+    await this.prisma.company.update({
+      where: { id: companyId },
+      data: { portalAccessGranted: true, kycStatus: 'APPROVED' },
+    })
+
+    const admin = company.memberships[0]?.user
+    if (admin) {
+      const portalUrl = `${process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000'}/portal`
+      // Don't fail the approval if email send fails — log only.
+      void this.emailService.sendApprovalEmail(admin.email, admin.firstName, portalUrl)
+    }
+
+    return { approved: true }
+  }
 
   async createCompany(input: CreateCompanyInput, user: AuthUser) {
     const existing = await this.prisma.companyMembership.findFirst({
@@ -43,10 +112,10 @@ export class CompaniesService {
           existingSoftwareStack: input.existingSoftwareStack ?? undefined,
           annualRevenueRange: input.annualRevenueRange,
           yearsInBusiness: input.yearsInBusiness,
-          // Stub: real trigger moves to KYC approval in Prompt 6 (see
-          // planning/25 §1 decision 4). For today, granting portal access
-          // on company create unblocks the onboarding chain.
-          portalAccessGranted: true,
+          // Portal access is granted by an AITEK_ADMIN via /companies/:id/approve
+          // after they review the full onboarding (company + KYC + service +
+          // questionnaire). Until then the user is held on /onboarding/pending.
+          portalAccessGranted: false,
         },
       })
 
