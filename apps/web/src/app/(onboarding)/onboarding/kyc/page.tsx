@@ -62,7 +62,8 @@ export default function KycPage() {
 
   const { data: submission } = useQuery<KycSubmission | null>({
     queryKey: ['kyc-me'],
-    queryFn: async () => (await api.get<KycSubmission | null>('/kyc/me')).data,
+    queryFn: async () =>
+      (await api.get<{ data: KycSubmission | null }>('/kyc/me')).data.data,
   })
 
   useEffect(() => {
@@ -143,7 +144,7 @@ export default function KycPage() {
         <BotBubble className="!max-w-full">
           <div className="w-full space-y-2">
             {REQUIRED_CATEGORIES.map((cat) => {
-              const uploaded = submission?.documents.find((d) => d.category === cat.category)
+              const uploaded = submission?.documents?.find((d) => d.category === cat.category)
               const isUploading = uploadingCategory === cat.category
               return (
                 <div

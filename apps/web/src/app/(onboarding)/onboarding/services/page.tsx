@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { useRouter } from 'next/navigation'
 
@@ -32,14 +32,16 @@ interface CatalogCategory {
 
 export default function ServicesPage() {
   const router = useRouter()
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [openCategories, setOpenCategories] = useState<Set<string>>(new Set())
   const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [showCatalog, setShowCatalog] = useState(false)
 
   const { data: catalog, isLoading } = useQuery<CatalogCategory[]>({
     queryKey: ['service-catalog'],
-    queryFn: async () => (await api.get<CatalogCategory[]>('/services')).data,
+    queryFn: async () =>
+      (await api.get<{ data: CatalogCategory[] }>('/services')).data.data,
   })
 
   // Reveal the catalog after the bot "types" for a moment
@@ -51,14 +53,14 @@ export default function ServicesPage() {
     return undefined
   }, [isLoading])
 
-  const toggleService = (id: string) => {
-    setSelected((cur) => {
-      const next = new Set(cur)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
+  const selectedService = useMemo(() => {
+    if (!selectedId || !catalog) return null
+    for (const cat of catalog) {
+      const found = cat.services.find((s) => s.id === selectedId)
+      if (found) return found
+    }
+    return null
+  }, [selectedId, catalog])
 
   const toggleCategory = (id: string) => {
     setOpenCategories((cur) => {
@@ -70,13 +72,21 @@ export default function ServicesPage() {
   }
 
   const handleContinue = async () => {
-    if (selected.size === 0) return
+    if (!selectedId) return
     setSubmitting(true)
+    setSubmitError(null)
     try {
-      await api.post('/onboarding/services', { serviceIds: Array.from(selected) })
+      await api.post('/onboarding/services', { serviceIds: [selectedId] })
       router.push('/onboarding/questionnaire')
     } catch (err) {
-      console.error(err)
+      const msg =
+        typeof err === 'object' &&
+        err !== null &&
+        'response' in err &&
+        (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          ? (err as { response: { data: { message: string } } }).response.data.message
+          : 'Failed to save your selection. Try again.'
+      setSubmitError(msg)
     } finally {
       setSubmitting(false)
     }
@@ -88,8 +98,8 @@ export default function ServicesPage() {
         Great &mdash; your identity is being verified. Let&apos;s talk about what we can do for you.
       </BotBubble>
       <BotBubble>
-        Which services interest you? Pick as many as you like — your answers help us route you to
-        the right team and build a focused brief.
+        Which service is the best fit for what you need? Pick the one that matches your project
+        most closely &mdash; we&apos;ll dig into the specifics next.
       </BotBubble>
 
       {!showCatalog && <TypingIndicator />}
@@ -117,21 +127,36 @@ export default function ServicesPage() {
                   )}
                 </button>
                 {openCategories.has(cat.id) && (
-                  <div className="flex flex-wrap gap-2 border-t p-3">
-                    {cat.services.map((svc) => (
-                      <button
-                        key={svc.id}
-                        type="button"
-                        onClick={() => toggleService(svc.id)}
-                        className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
-                          selected.has(svc.id)
-                            ? 'border-primary bg-primary text-primary-foreground'
-                            : 'border-border bg-background hover:bg-muted'
-                        }`}
-                      >
-                        {svc.name}
-                      </button>
-                    ))}
+                  <div className="flex flex-col gap-1 border-t p-3">
+                    {cat.services.map((svc) => {
+                      const isSelected = selectedId === svc.id
+                      return (
+                        <label
+                          key={svc.id}
+                          className={`flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2 text-sm transition-colors ${
+                            isSelected
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border bg-background hover:bg-muted/40'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="service"
+                            className="mt-0.5 h-4 w-4 accent-primary"
+                            checked={isSelected}
+                            onChange={() => setSelectedId(svc.id)}
+                          />
+                          <div className="min-w-0">
+                            <div className="font-medium text-foreground">{svc.name}</div>
+                            {svc.description && (
+                              <div className="text-xs text-muted-foreground">
+                                {svc.description}
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -140,17 +165,17 @@ export default function ServicesPage() {
         </BotBubble>
       )}
 
-      {selected.size > 0 && (
-        <UserBubble>
-          Selected {selected.size} service{selected.size === 1 ? '' : 's'}
-        </UserBubble>
+      {selectedService && <UserBubble>{selectedService.name}</UserBubble>}
+
+      {submitError && (
+        <BotBubble className="text-destructive">{submitError}</BotBubble>
       )}
 
       {showCatalog && (
         <div className="flex justify-end pt-2">
-          <Button onClick={handleContinue} disabled={selected.size === 0 || submitting}>
+          <Button onClick={handleContinue} disabled={!selectedId || submitting}>
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Continue to requirements
+            {submitting ? 'Saving…' : 'Continue to requirements'}
           </Button>
         </div>
       )}

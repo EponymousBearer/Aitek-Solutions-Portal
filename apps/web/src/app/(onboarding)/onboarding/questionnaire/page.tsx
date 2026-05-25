@@ -66,15 +66,16 @@ export default function QuestionnairePage() {
 
   const { data: template, isLoading } = useQuery<DefaultTemplate>({
     queryKey: ['questionnaire-default'],
-    queryFn: async () => (await api.get<DefaultTemplate>('/questionnaire/templates/default')).data,
+    queryFn: async () =>
+      (await api.get<{ data: DefaultTemplate }>('/questionnaire/templates/default')).data.data,
   })
 
   // Bootstrap a response row once the template loads.
   useEffect(() => {
     if (!template || responseId) return
     void api
-      .post<ResponseRecord>('/onboarding/responses', { templateId: template.id })
-      .then((r) => setResponseId(r.data.id))
+      .post<{ data: ResponseRecord }>('/onboarding/responses', { templateId: template.id })
+      .then((r) => setResponseId(r.data.data.id))
       .catch((err) => {
         console.error(err)
         setSubmitError('Failed to start questionnaire. Try refreshing the page.')
@@ -116,7 +117,7 @@ export default function QuestionnairePage() {
     try {
       await api.post(`/onboarding/responses/${responseId}/submit`)
       await queryClient.invalidateQueries({ queryKey: ['current-user'] })
-      router.push('/portal')
+      router.push('/onboarding/pending')
     } catch (err) {
       console.error(err)
       setSubmitError('Failed to submit. Please try again.')
@@ -167,14 +168,14 @@ export default function QuestionnairePage() {
       {allDone && (
         <>
           <BotBubble>
-            That&apos;s everything I need. Submit your responses to finish onboarding &mdash;
-            you&apos;ll land in the portal.
+            That&apos;s everything I need. Submit your responses for review &mdash; our team will
+            look over your onboarding and email you when your portal is ready.
           </BotBubble>
           {submitError && <BotBubble className="text-destructive">{submitError}</BotBubble>}
           <div className="flex justify-end pt-2">
             <Button onClick={handleSubmitAll} disabled={submitting}>
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Submit and enter portal
+              {submitting ? 'Submitting…' : 'Submit for review'}
             </Button>
           </div>
         </>

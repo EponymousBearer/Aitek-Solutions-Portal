@@ -189,11 +189,20 @@ export default function CompanyPage() {
   const [step, setStep] = useState(1)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+
+  const extractError = (err: unknown): string => {
+    if (typeof err === 'object' && err !== null && 'response' in err) {
+      const resp = (err as { response?: { data?: { message?: string } } }).response
+      if (resp?.data?.message) return resp.data.message
+    }
+    if (err instanceof Error) return err.message
+    return 'Something went wrong. Please try again.'
+  }
 
   const {
     register,
-    handleSubmit,
     setValue,
     watch,
     trigger,
@@ -201,6 +210,9 @@ export default function CompanyPage() {
     formState: { errors },
   } = useForm<CreateCompanyInput>({
     resolver: zodResolver(createCompanySchema),
+    // Validate each field when it loses focus, then re-validate on change, so
+    // inline errors appear as the user moves through the form.
+    mode: 'onTouched',
     defaultValues: {
       socialLinks: { linkedin: '', twitter: '' },
       existingSoftwareStack: [],
@@ -259,6 +271,7 @@ export default function CompanyPage() {
     if (!valid) return
 
     setSaving(true)
+    setSubmitError(null)
     try {
       const values = watch()
       if (companyId) {
@@ -269,33 +282,46 @@ export default function CompanyPage() {
       }
       setStep(2)
     } catch (err) {
-      console.error(err)
+      setSubmitError(extractError(err))
     } finally {
       setSaving(false)
     }
   }
 
   const handleStep2 = async () => {
+    const valid = await trigger(['socialLinks.linkedin', 'socialLinks.twitter'])
+    if (!valid) return
+
     setSaving(true)
+    setSubmitError(null)
     try {
       await autoSave({ socialLinks: watch('socialLinks') })
       setStep(3)
+    } catch (err) {
+      setSubmitError(extractError(err))
     } finally {
       setSaving(false)
     }
   }
 
-  const handleStep3 = handleSubmit(async (data) => {
+  // Steps 2 & 3 are optional enrichment; the required fields were already
+  // validated in step 1. Don't gate "Continue" on a full-schema re-validation
+  // here — react-hook-form's handleSubmit was aborting silently whenever an
+  // optional field failed (e.g. a non-URL LinkedIn/Twitter typed in step 2),
+  // leaving the button dead with no error shown. Save the current values and
+  // advance to identity verification.
+  const handleStep3 = async () => {
     setSaving(true)
+    setSubmitError(null)
     try {
-      await api.put('/companies/me', data)
+      await api.put('/companies/me', watch())
       router.push('/onboarding/kyc')
     } catch (err) {
-      console.error(err)
+      setSubmitError(extractError(err))
     } finally {
       setSaving(false)
     }
-  })
+  }
 
   return (
     <ChatShell currentStep="company">
@@ -352,10 +378,16 @@ export default function CompanyPage() {
                 <div className="space-y-1.5">
                   <Label htmlFor="businessType">Business type</Label>
                   <Input id="businessType" {...register('businessType')} placeholder="LLC, Corp…" />
+                  {errors.businessType && (
+                    <p className="text-xs text-destructive">{errors.businessType.message}</p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="industry">Industry</Label>
                   <Input id="industry" {...register('industry')} placeholder="Healthcare, Finance…" />
+                  {errors.industry && (
+                    <p className="text-xs text-destructive">{errors.industry.message}</p>
+                  )}
                 </div>
               </div>
 
@@ -374,10 +406,16 @@ export default function CompanyPage() {
                 <div className="space-y-1.5">
                   <Label htmlFor="country">Country</Label>
                   <Input id="country" {...register('country')} placeholder="United States" />
+                  {errors.country && (
+                    <p className="text-xs text-destructive">{errors.country.message}</p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="state">State / Province</Label>
                   <Input id="state" {...register('state')} placeholder="California" />
+                  {errors.state && (
+                    <p className="text-xs text-destructive">{errors.state.message}</p>
+                  )}
                 </div>
               </div>
 
@@ -389,9 +427,15 @@ export default function CompanyPage() {
                 )}
               </div>
 
+              {submitError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {submitError}
+                </p>
+              )}
+
               <Button type="submit" className="w-full" disabled={saving}>
                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Continue
+                {saving ? 'Continuing…' : 'Continue'}
               </Button>
             </form>
           )}
@@ -411,6 +455,9 @@ export default function CompanyPage() {
                   {...register('socialLinks.linkedin')}
                   placeholder="https://linkedin.com/company/your-company"
                 />
+                {errors.socialLinks?.linkedin && (
+                  <p className="text-xs text-destructive">{errors.socialLinks.linkedin.message}</p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -420,7 +467,16 @@ export default function CompanyPage() {
                   {...register('socialLinks.twitter')}
                   placeholder="https://twitter.com/yourhandle"
                 />
+                {errors.socialLinks?.twitter && (
+                  <p className="text-xs text-destructive">{errors.socialLinks.twitter.message}</p>
+                )}
               </div>
+
+              {submitError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {submitError}
+                </p>
+              )}
 
               <div className="flex gap-3">
                 <Button
@@ -428,19 +484,26 @@ export default function CompanyPage() {
                   variant="outline"
                   className="flex-1"
                   onClick={() => setStep(1)}
+                  disabled={saving}
                 >
                   Back
                 </Button>
                 <Button type="submit" className="flex-1" disabled={saving}>
                   {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Continue
+                  {saving ? 'Continuing…' : 'Continue'}
                 </Button>
               </div>
             </form>
           )}
 
           {step === 3 && (
-            <form onSubmit={handleStep3} className="space-y-4">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                void handleStep3()
+              }}
+              className="space-y-4"
+            >
               <div className="space-y-1.5">
                 <Label>Annual revenue range</Label>
                 <NativeSelect
@@ -473,18 +536,25 @@ export default function CompanyPage() {
                 />
               </div>
 
+              {submitError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {submitError}
+                </p>
+              )}
+
               <div className="flex gap-3">
                 <Button
                   type="button"
                   variant="outline"
                   className="flex-1"
                   onClick={() => setStep(2)}
+                  disabled={saving}
                 >
                   Back
                 </Button>
                 <Button type="submit" className="flex-1" disabled={saving}>
                   {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Continue to identity verification
+                  {saving ? 'Continuing…' : 'Continue to identity verification'}
                 </Button>
               </div>
             </form>
