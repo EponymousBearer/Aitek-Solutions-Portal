@@ -25,6 +25,28 @@ COPY apps/web/ ./apps/web/
 # Build internal workspace packages so their dist/ exists before Next.js resolves them
 RUN npm run build -w packages/types
 
+# Stage: Dev (hot-reload via `next dev`)
+# Used by docker-compose.dev.yml. Source is bind-mounted over /app/apps/web at
+# runtime, so this image only needs deps; `next dev` handles HMR. NEXT_PUBLIC_*
+# are read at runtime here (no need to bake them in like the production build).
+FROM builder AS dev
+
+ENV NODE_ENV=development
+WORKDIR /app/apps/web
+EXPOSE 3000
+CMD ["npm", "run", "dev"]
+
+# Stage: Build (production Next.js standalone compile)
+FROM builder AS build
+
+# Build-time public env vars (NEXT_PUBLIC_* must be baked in at next build time)
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+
 # Build Next.js (standalone output)
 RUN cd apps/web && npm run build
 
@@ -40,9 +62,9 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Copy standalone build
-COPY --from=builder /app/apps/web/.next/standalone ./
-COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=builder /app/apps/web/public ./apps/web/public
+COPY --from=build /app/apps/web/.next/standalone ./
+COPY --from=build /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=build /app/apps/web/public ./apps/web/public
 
 EXPOSE 3000
 

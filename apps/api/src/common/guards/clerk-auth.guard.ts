@@ -1,3 +1,6 @@
+import type { AuthUser } from '@aitek/types'
+import { UserRole, CompanyMembershipRole } from '@aitek/types'
+import { verifyToken } from '@clerk/backend'
 import {
   CanActivate,
   ExecutionContext,
@@ -5,16 +8,17 @@ import {
   UnauthorizedException,
 } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
-import { verifyToken } from '@clerk/backend'
 
-import type { AuthUser } from '@aitek/types'
-import { UserRole, CompanyMembershipRole } from '@aitek/types'
 
+import { PrismaService } from '../../prisma/prisma.service'
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator'
 
 @Injectable()
 export class ClerkAuthGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  constructor(
+    private reflector: Reflector,
+    private prisma: PrismaService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
@@ -32,27 +36,58 @@ export class ClerkAuthGuard implements CanActivate {
 
     const token = authHeader.slice(7)
 
+    let payload
     try {
-      const payload = await verifyToken(token, {
+      payload = await verifyToken(token, {
         secretKey: process.env['CLERK_SECRET_KEY'] ?? '',
       })
-
-      const user: AuthUser = {
-        id: payload.sub,
-        clerkId: payload.sub,
-        email: (payload['email'] as string) ?? '',
-        firstName: (payload['firstName'] as string) ?? '',
-        lastName: (payload['lastName'] as string) ?? '',
-        role: (payload['role'] as UserRole) ?? UserRole.CLIENT_USER,
-        companyId: (payload['companyId'] as string) ?? undefined,
-        companyMembershipRole:
-          (payload['companyMembershipRole'] as CompanyMembershipRole) ?? undefined,
-      }
-
-      request.user = user
-      return true
     } catch {
       throw new UnauthorizedException('Invalid or expired token')
     }
+
+    const clerkId = payload.sub
+
+    // Hydrate from DB. The JWT can lag the DB (e.g. just after POST /companies
+    // succeeds, the publicMetadata sync may not have propagated to the cached
+    // session token yet). Treating DB as the source of truth here keeps every
+    // downstream endpoint consistent.
+    //
+    // On the very first /auth/me the user row may not exist yet — /auth/me's
+    // self-heal will create it. Fall back to clerkId so the guard still admits
+    // that bootstrap call.
+    const dbUser = await this.prisma.user.findUnique({
+      where: { clerkId },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        companyMemberships: {
+          where: { isActive: true },
+          take: 1,
+          select: { companyId: true, role: true },
+        },
+      },
+    })
+
+    const membership = dbUser?.companyMemberships[0]
+
+    const user: AuthUser = {
+      id: dbUser?.id ?? clerkId,
+      clerkId,
+      email: dbUser?.email ?? (payload['email'] as string) ?? '',
+      firstName: dbUser?.firstName ?? (payload['firstName'] as string) ?? '',
+      lastName: dbUser?.lastName ?? (payload['lastName'] as string) ?? '',
+      role: (dbUser?.role as UserRole) ?? (payload['role'] as UserRole) ?? UserRole.CLIENT_USER,
+      companyId: membership?.companyId ?? (payload['companyId'] as string) ?? undefined,
+      companyMembershipRole:
+        (membership?.role as CompanyMembershipRole | undefined) ??
+        (payload['companyMembershipRole'] as CompanyMembershipRole) ??
+        undefined,
+    }
+
+    request.user = user
+    return true
   }
 }

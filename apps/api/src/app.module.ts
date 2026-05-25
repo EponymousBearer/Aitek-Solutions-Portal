@@ -1,13 +1,20 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
-import { ThrottlerModule } from '@nestjs/throttler'
+import { APP_GUARD } from '@nestjs/core'
 import { EventEmitterModule } from '@nestjs/event-emitter'
 import { ScheduleModule } from '@nestjs/schedule'
+import { ThrottlerModule } from '@nestjs/throttler'
 import * as Joi from 'joi'
 
-import { HealthModule } from './modules/health/health.module'
+import { ClerkAuthGuard } from './common/guards/clerk-auth.guard'
+import { RolesGuard } from './common/guards/roles.guard'
 import { AuthModule } from './modules/auth/auth.module'
 import { CompaniesModule } from './modules/companies/companies.module'
+import { HealthModule } from './modules/health/health.module'
+import { KycModule } from './modules/kyc/kyc.module'
+import { OnboardingModule } from './modules/onboarding/onboarding.module'
+import { QuestionnaireModule } from './modules/questionnaire/questionnaire.module'
+import { ServicesModule } from './modules/services/services.module'
 import { PrismaModule } from './prisma/prisma.module'
 
 @Module({
@@ -38,6 +45,16 @@ import { PrismaModule } from './prisma/prisma.module'
     HealthModule,
     AuthModule,
     CompaniesModule,
+    ServicesModule,
+    QuestionnaireModule,
+    OnboardingModule,
+    KycModule,
+  ],
+  providers: [
+    // Global guards. ClerkAuthGuard needs DI (Prisma) so it can't be
+    // instantiated manually in main.ts the way it was before.
+    { provide: APP_GUARD, useClass: ClerkAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
 export class AppModule {}

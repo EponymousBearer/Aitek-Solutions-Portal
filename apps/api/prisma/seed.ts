@@ -285,10 +285,28 @@ async function seedAdminUser() {
     return
   }
 
-  await prisma.user.upsert({
-    where: { email },
-    update: {},
-    create: {
+  const existing = await prisma.user.findUnique({ where: { email } })
+
+  if (existing) {
+    if (existing.role !== UserRole.AITEK_ADMIN) {
+      await prisma.user.update({
+        where: { id: existing.id },
+        data: { role: UserRole.AITEK_ADMIN, status: UserStatus.ACTIVE },
+      })
+      console.log(`✓ Promoted existing user to AITEK_ADMIN: ${email}`)
+      console.log(`  Clerk publicMetadata not synced here — user must sign out/in,`)
+      console.log(`  or an admin must trigger a resync, before JWT carries new role.`)
+    } else {
+      console.log(`✓ Admin user already provisioned: ${email}`)
+    }
+    return
+  }
+
+  // Pre-seed shim. When the real Clerk user signs up with this email, the
+  // user.created webhook in AuthService binds the real clerkId to this row and
+  // syncs role=AITEK_ADMIN into Clerk publicMetadata.
+  await prisma.user.create({
+    data: {
       clerkId: `seed-admin-${email}`,
       email,
       firstName: 'Admin',
@@ -297,8 +315,7 @@ async function seedAdminUser() {
       status: UserStatus.ACTIVE,
     },
   })
-
-  console.log(`✓ Admin user seeded: ${email}`)
+  console.log(`✓ Admin user seeded (clerkId binds on first sign-up): ${email}`)
 }
 
 async function main() {

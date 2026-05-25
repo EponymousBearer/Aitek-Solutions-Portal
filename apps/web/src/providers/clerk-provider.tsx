@@ -14,6 +14,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider
       publishableKey={publishableKey}
+      signUpForceRedirectUrl="/onboarding/company"
+      signInFallbackRedirectUrl="/portal"
       appearance={{
         variables: {
           colorPrimary: '#3B82F6',

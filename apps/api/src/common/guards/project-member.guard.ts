@@ -1,6 +1,7 @@
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common'
-import { PrismaService } from '../../prisma/prisma.service'
 import { UserRole } from '@aitek/types'
+import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common'
+
+import { PrismaService } from '../../prisma/prisma.service'
 
 @Injectable()
 export class ProjectMemberGuard implements CanActivate {

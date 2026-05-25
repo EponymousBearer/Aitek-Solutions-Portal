@@ -1,3 +1,6 @@
+
+import { CompanyMembershipRole, OnboardingStatus, UserRole } from '@aitek/types'
+import type { AuthUser, CreateCompanyInput, UpdateCompanyInput } from '@aitek/types'
 import {
   ConflictException,
   ForbiddenException,
@@ -5,18 +8,86 @@ import {
   NotFoundException,
 } from '@nestjs/common'
 
-import { CompanyMembershipRole } from '@aitek/types'
-import type { AuthUser, CreateCompanyInput, UpdateCompanyInput } from '@aitek/types'
-
 import { PrismaService } from '../../prisma/prisma.service'
 import { AuthService } from '../auth/auth.service'
+import { ClerkMetadataSyncService } from '../auth/clerk-metadata-sync.service'
+import { EmailService } from '../notifications/email.service'
 
 @Injectable()
 export class CompaniesService {
   constructor(
     private prisma: PrismaService,
     private authService: AuthService,
+    private metadataSync: ClerkMetadataSyncService,
+    private emailService: EmailService,
   ) {}
+
+  // ─── Admin: pending-approval queue ─────────────────────────────────────────
+
+  private assertAitekTeam(user: AuthUser): void {
+    if (user.role !== UserRole.AITEK_ADMIN && user.role !== UserRole.AITEK_TEAM_MEMBER) {
+      throw new ForbiddenException('AiTek team access required')
+    }
+  }
+
+  async listPendingApprovals(user: AuthUser) {
+    this.assertAitekTeam(user)
+
+    return this.prisma.company.findMany({
+      where: {
+        portalAccessGranted: false,
+        onboardingSessions: { some: { status: OnboardingStatus.COMPLETED } },
+      },
+      include: {
+        memberships: {
+          where: { isActive: true, role: CompanyMembershipRole.CLIENT_ADMIN },
+          take: 1,
+          include: {
+            user: {
+              select: { id: true, email: true, firstName: true, lastName: true },
+            },
+          },
+        },
+        _count: { select: { selectedServices: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+  }
+
+  async approveCompany(companyId: string, user: AuthUser) {
+    this.assertAitekTeam(user)
+
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      include: {
+        memberships: {
+          where: { isActive: true, role: CompanyMembershipRole.CLIENT_ADMIN },
+          take: 1,
+          include: {
+            user: { select: { id: true, email: true, firstName: true } },
+          },
+        },
+      },
+    })
+    if (!company) throw new NotFoundException('Company not found')
+    if (company.portalAccessGranted) {
+      throw new ConflictException('Company is already approved')
+    }
+
+    await this.prisma.company.update({
+      where: { id: companyId },
+      data: { portalAccessGranted: true, kycStatus: 'APPROVED' },
+    })
+
+    const admin = company.memberships[0]?.user
+    if (admin) {
+      const portalUrl = `${process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000'}/portal`
+      // Don't fail the approval if email send fails — log only.
+      void this.emailService.sendApprovalEmail(admin.email, admin.firstName, portalUrl)
+    }
+
+    return { approved: true }
+  }
 
   async createCompany(input: CreateCompanyInput, user: AuthUser) {
     const existing = await this.prisma.companyMembership.findFirst({
@@ -26,8 +97,8 @@ export class CompaniesService {
 
     const slug = this.generateSlug(input.name)
 
-    return this.prisma.$transaction(async (tx) => {
-      const company = await tx.company.create({
+    const company = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.company.create({
         data: {
           name: input.name,
           slug,
@@ -41,20 +112,33 @@ export class CompaniesService {
           existingSoftwareStack: input.existingSoftwareStack ?? undefined,
           annualRevenueRange: input.annualRevenueRange,
           yearsInBusiness: input.yearsInBusiness,
+          // Portal access is granted by an AITEK_ADMIN via /companies/:id/approve
+          // after they review the full onboarding (company + KYC + service +
+          // questionnaire). Until then the user is held on /onboarding/pending.
+          portalAccessGranted: false,
         },
       })
 
       await tx.companyMembership.create({
         data: {
           userId: user.id,
-          companyId: company.id,
+          companyId: created.id,
           role: CompanyMembershipRole.CLIENT_ADMIN,
           isActive: true,
         },
       })
 
-      return company
+      return created
     })
+
+    // Sync claims AFTER the DB transaction commits so the network call doesn't
+    // hold a Postgres lock.
+    await this.metadataSync.sync(user.clerkId, {
+      companyId: company.id,
+      companyMembershipRole: CompanyMembershipRole.CLIENT_ADMIN,
+    })
+
+    return company
   }
 
   async getMyCompany(user: AuthUser) {

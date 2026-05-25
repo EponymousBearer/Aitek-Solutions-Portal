@@ -2,16 +2,27 @@ import { z } from 'zod'
 
 export const createCompanySchema = z.object({
   name: z.string().min(2, 'Company name must be at least 2 characters').max(100),
-  businessType: z.string().min(1).max(100).optional(),
-  industry: z.string().min(1).max(100).optional(),
+  // Optional text fields: an empty input is valid (no `.min(1)`, which would
+  // reject '' and surface a spurious "too small" error on a field the user
+  // chose to leave blank).
+  businessType: z.string().max(100, 'Keep this under 100 characters').optional(),
+  industry: z.string().max(100, 'Keep this under 100 characters').optional(),
   employeeCount: z.string().optional(),
-  country: z.string().min(1).max(100).optional(),
-  state: z.string().max(100).optional(),
-  website: z.string().url('Must be a valid URL').optional().or(z.literal('')),
+  country: z.string().max(100, 'Keep this under 100 characters').optional(),
+  state: z.string().max(100, 'Keep this under 100 characters').optional(),
+  website: z.string().url('Enter a valid URL, including https://').optional().or(z.literal('')),
   socialLinks: z
     .object({
-      linkedin: z.string().url().optional().or(z.literal('')),
-      twitter: z.string().url().optional().or(z.literal('')),
+      linkedin: z
+        .string()
+        .url('Enter a valid URL, including https://')
+        .optional()
+        .or(z.literal('')),
+      twitter: z
+        .string()
+        .url('Enter a valid URL, including https://')
+        .optional()
+        .or(z.literal('')),
     })
     .optional(),
   existingSoftwareStack: z.array(z.string()).optional(),

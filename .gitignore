@@ -8,6 +8,7 @@ dist
 build
 out
 .turbo
+*.tsbuildinfo
 
 # Environment files
 .env
@@ -51,3 +52,6 @@ apps/api/prisma/migrations/**/migration.sql
 .claude
 .turbo
 /planning
+
+# Graphify
+graphify-out

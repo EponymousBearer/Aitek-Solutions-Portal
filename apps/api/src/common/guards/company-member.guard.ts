@@ -1,6 +1,6 @@
+import { UserRole } from '@aitek/types'
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common'
 
-import { UserRole } from '@aitek/types'
 
 @Injectable()
 export class CompanyMemberGuard implements CanActivate {

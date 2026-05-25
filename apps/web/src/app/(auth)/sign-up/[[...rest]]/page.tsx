@@ -25,7 +25,7 @@ export default function SignUpPage() {
             formButtonPrimary: 'bg-primary hover:bg-primary/90 text-primary-foreground',
           },
         }}
-        fallbackRedirectUrl="/onboarding/company"
+        forceRedirectUrl="/onboarding/company"
         signInUrl="/sign-in"
       />
     </div>
