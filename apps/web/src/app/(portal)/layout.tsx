@@ -2,6 +2,9 @@ import { PortalGuard } from '@/components/layout/portal-guard'
 import { PortalHeader } from '@/components/layout/portal-header'
 import { PortalSidebar } from '@/components/layout/portal-sidebar'
 
+// Auth state is per-request; don't pre-render or the wrong layout flashes.
+export const dynamic = 'force-dynamic'
+
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   return (
     <PortalGuard>

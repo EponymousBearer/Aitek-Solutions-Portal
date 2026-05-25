@@ -5,11 +5,12 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { KYCStatus } from '@aitek/types'
+import { useAuth } from '@clerk/nextjs'
 
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 
 // Step-aware portal gate. Decision tree (locked in planning/25 §1b):
-//   1. Aitek team passes through to whatever portal route requested.
+//   1. Aitek team (admin / team member) → /admin (their home; no client portal).
 //   2. No companyId → /onboarding/company
 //   3. kycStatus === NOT_STARTED → /onboarding/kyc
 //   4. !hasSelectedServices → /onboarding/services
@@ -32,16 +33,21 @@ function nextStep(user: {
 }
 
 export function PortalGuard({ children }: { children: React.ReactNode }) {
+  const { isLoaded, isSignedIn } = useAuth()
   const { user, isLoading, isAitekTeam } = useCurrentUser()
   const router = useRouter()
 
-  const target = !isLoading && user && !isAitekTeam ? nextStep(user) : null
+  // Only consider a routing decision after Clerk has settled AND (we know we're
+  // signed out OR the /auth/me call has returned). This blocks the static
+  // layout from flashing while we figure out where to send the user.
+  const ready = isLoaded && (isSignedIn === false || (!isLoading && user !== undefined))
+  const target = ready && user ? (isAitekTeam ? '/admin' : nextStep(user)) : null
 
   useEffect(() => {
     if (target) router.replace(target)
   }, [target, router])
 
-  if (isLoading) {
+  if (!ready || target) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -49,7 +55,6 @@ export function PortalGuard({ children }: { children: React.ReactNode }) {
     )
   }
 
-  if (target) return null
   return <>{children}</>
 }
 
