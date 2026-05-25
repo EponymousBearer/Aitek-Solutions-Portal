@@ -28,36 +28,57 @@ export class AuthService {
     private metadataSync: ClerkMetadataSyncService,
   ) {}
 
-  // Full /auth/me payload: base identity + derived onboarding state.
-  // Derived fields are NOT in the JWT; they are computed here so PortalGuard
-  // can route incomplete users to the right onboarding step.
-  async getUserContext(clerkId: string): Promise<AuthUser> {
-    const user = await this.prisma.user.findUnique({
-      where: { clerkId },
+  private userContextInclude = {
+    companyMemberships: {
+      where: { isActive: true },
+      take: 1,
       include: {
-        companyMemberships: {
-          where: { isActive: true },
-          take: 1,
-          include: {
-            company: {
-              select: {
-                id: true,
-                kycStatus: true,
-                portalAccessGranted: true,
-                _count: { select: { selectedServices: true } },
-                onboardingSessions: {
-                  where: { status: OnboardingStatus.COMPLETED },
-                  take: 1,
-                  select: { id: true },
-                },
-              },
+        company: {
+          select: {
+            id: true,
+            kycStatus: true,
+            portalAccessGranted: true,
+            _count: { select: { selectedServices: true } },
+            onboardingSessions: {
+              where: { status: OnboardingStatus.COMPLETED },
+              take: 1,
+              select: { id: true },
             },
           },
         },
       },
+    },
+  } as const
+
+  // Full /auth/me payload: base identity + derived onboarding state.
+  // Derived fields are NOT in the JWT; they are computed here so PortalGuard
+  // can route incomplete users to the right onboarding step.
+  async getUserContext(clerkId: string): Promise<AuthUser> {
+    let user = await this.prisma.user.findUnique({
+      where: { clerkId },
+      include: this.userContextInclude,
     })
 
-    if (!user) throw new UnauthorizedException('User not found')
+    if (!user) {
+      // Webhook hasn't fired (local dev without ngrok, or race with first /auth/me).
+      // Self-heal: fetch identity from Clerk and create the DB row exactly as
+      // handleUserCreated would.
+      const clerkUser = await this.metadataSync.getClerkUser(clerkId)
+      if (!clerkUser) throw new UnauthorizedException('User not found')
+
+      await this.handleUserCreated({
+        id: clerkId,
+        email_addresses: [{ email_address: clerkUser.email }],
+        first_name: clerkUser.firstName,
+        last_name: clerkUser.lastName,
+      })
+
+      user = await this.prisma.user.findUnique({
+        where: { clerkId },
+        include: this.userContextInclude,
+      })
+      if (!user) throw new UnauthorizedException('User not found')
+    }
 
     const membership = user.companyMemberships[0]
     const company = membership?.company

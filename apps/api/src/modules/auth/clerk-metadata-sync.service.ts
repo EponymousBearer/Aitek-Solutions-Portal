@@ -23,6 +23,27 @@ export class ClerkMetadataSyncService {
     secretKey: process.env['CLERK_SECRET_KEY'] ?? '',
   })
 
+  // Fetch a user's identity straight from Clerk. Used as a fallback when the
+  // user.created webhook hasn't delivered yet (common in local dev without
+  // ngrok) so /auth/me can self-heal by creating the DB row on first call.
+  async getClerkUser(
+    clerkId: string,
+  ): Promise<{ email: string; firstName: string; lastName: string } | null> {
+    if (!clerkId || clerkId.startsWith('seed-')) return null
+    try {
+      const u = await this.clerk.users.getUser(clerkId)
+      return {
+        email: u.emailAddresses[0]?.emailAddress ?? '',
+        firstName: u.firstName ?? '',
+        lastName: u.lastName ?? '',
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      this.logger.error(`Clerk getUser failed for ${clerkId}: ${msg}`)
+      return null
+    }
+  }
+
   async sync(clerkId: string, metadata: PublicMetadataInput): Promise<void> {
     if (!clerkId || clerkId.startsWith('seed-')) {
       // Seed-only users don't exist in Clerk yet — they'll get synced when they

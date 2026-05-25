@@ -6,8 +6,6 @@ const compression = require('compression') as () => ReturnType<typeof import('co
 
 import { AppModule } from './app.module'
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
-import { ClerkAuthGuard } from './common/guards/clerk-auth.guard'
-import { RolesGuard } from './common/guards/roles.guard'
 import { ResponseTransformInterceptor } from './common/interceptors/response-transform.interceptor'
 
 async function bootstrap() {
@@ -25,7 +23,7 @@ async function bootstrap() {
     new ResponseTransformInterceptor(),
     new ClassSerializerInterceptor(reflector),
   )
-  app.useGlobalGuards(new ClerkAuthGuard(reflector), new RolesGuard(reflector))
+  // Guards are registered via APP_GUARD in AppModule so they participate in DI.
 
   app.enableCors({
     origin: process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000',

@@ -1,10 +1,13 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
+import { APP_GUARD } from '@nestjs/core'
 import { EventEmitterModule } from '@nestjs/event-emitter'
 import { ScheduleModule } from '@nestjs/schedule'
 import { ThrottlerModule } from '@nestjs/throttler'
 import * as Joi from 'joi'
 
+import { ClerkAuthGuard } from './common/guards/clerk-auth.guard'
+import { RolesGuard } from './common/guards/roles.guard'
 import { AuthModule } from './modules/auth/auth.module'
 import { CompaniesModule } from './modules/companies/companies.module'
 import { HealthModule } from './modules/health/health.module'
@@ -46,6 +49,12 @@ import { PrismaModule } from './prisma/prisma.module'
     QuestionnaireModule,
     OnboardingModule,
     KycModule,
+  ],
+  providers: [
+    // Global guards. ClerkAuthGuard needs DI (Prisma) so it can't be
+    // instantiated manually in main.ts the way it was before.
+    { provide: APP_GUARD, useClass: ClerkAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
 export class AppModule {}
