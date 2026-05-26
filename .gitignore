@@ -42,8 +42,9 @@ coverage
 .DS_Store
 Thumbs.db
 
-# Prisma
-apps/api/prisma/migrations/**/migration.sql
+# Prisma — migration SQL is the source of truth for `prisma migrate deploy`
+# and MUST be committed, or deploys apply zero migrations and come up with an
+# empty (table-less) database.
 
 # Sentry
 .sentryclirc
