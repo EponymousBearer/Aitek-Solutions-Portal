@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { useRouter } from 'next/navigation'
 
-import { KYCDocumentCategory, KYCStatus } from '@aitek/types'
+import { KYCDocumentCategory, KYCStatus, OnboardingPhase } from '@aitek/types'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, FileText, Loader2, Upload } from 'lucide-react'
 
@@ -13,7 +13,9 @@ import { ChatShell } from '@/components/onboarding/chat-shell'
 import { TypingIndicator } from '@/components/onboarding/typing-indicator'
 import { UserBubble } from '@/components/onboarding/user-bubble'
 import { Button } from '@/components/ui/button'
+import { useOnboardingPhaseGuard } from '@/hooks/useOnboardingProgress'
 import { api } from '@/lib/api'
+import { routeForPhase } from '@/lib/onboarding'
 
 interface KycDoc {
   id: string
@@ -55,6 +57,7 @@ const REQUIRED_CATEGORIES: { category: KYCDocumentCategory; label: string; help:
 export default function KycPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const { ready, reviewMode } = useOnboardingPhaseGuard(OnboardingPhase.KYC)
   const [uploadingCategory, setUploadingCategory] = useState<KYCDocumentCategory | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [showUploads, setShowUploads] = useState(false)
@@ -102,9 +105,10 @@ export default function KycPage() {
   const handleSubmit = async () => {
     setSubmitting(true)
     try {
-      await api.post('/kyc/me/submit')
+      const res = await api.post<{ data: { phase: OnboardingPhase } }>('/kyc/me/submit')
       await queryClient.invalidateQueries({ queryKey: ['current-user'] })
-      router.push('/onboarding/services')
+      await queryClient.invalidateQueries({ queryKey: ['onboarding-progress'] })
+      router.push(routeForPhase(res.data.data.phase))
     } catch (err) {
       console.error(err)
     } finally {
@@ -112,7 +116,17 @@ export default function KycPage() {
     }
   }
 
-  if (alreadySubmitted) {
+  if (!ready) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  // In review mode we always show the upload list so documents can be replaced;
+  // the "already submitted" waiting screen is only for the normal forward flow.
+  if (alreadySubmitted && !reviewMode) {
     return (
       <ChatShell currentStep="kyc">
         <BotBubble>
@@ -208,7 +222,19 @@ export default function KycPage() {
         </BotBubble>
       )}
 
-      {allRequiredUploaded && (
+      {allRequiredUploaded && reviewMode && (
+        <>
+          <UserBubble>All four documents uploaded</UserBubble>
+          <BotBubble>Replace any document above if needed, then head back to your review.</BotBubble>
+          <div className="flex justify-end pt-2">
+            <Button onClick={() => router.push('/onboarding/review')}>
+              Save &amp; return to review
+            </Button>
+          </div>
+        </>
+      )}
+
+      {allRequiredUploaded && !reviewMode && (
         <>
           <UserBubble>All four documents uploaded</UserBubble>
           <BotBubble>Submit for review and we&apos;ll take it from here.</BotBubble>

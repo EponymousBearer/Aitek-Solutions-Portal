@@ -1,4 +1,10 @@
-import { CompanyMembershipRole, KYCStatus, OnboardingStatus, UserRole } from '@aitek/types'
+import {
+  CompanyMembershipRole,
+  KYCStatus,
+  OnboardingPhase,
+  OnboardingStatus,
+  UserRole,
+} from '@aitek/types'
 import type { AuthUser } from '@aitek/types'
 import {
   BadRequestException,
@@ -38,6 +44,7 @@ export class AuthService {
             id: true,
             kycStatus: true,
             portalAccessGranted: true,
+            onboardingPhase: true,
             _count: { select: { selectedServices: true } },
             onboardingSessions: {
               where: { status: OnboardingStatus.COMPLETED },
@@ -96,6 +103,7 @@ export class AuthService {
       kycStatus: (company?.kycStatus as KYCStatus | undefined) ?? KYCStatus.NOT_STARTED,
       hasSelectedServices: (company?._count?.selectedServices ?? 0) > 0,
       onboardingComplete: (company?.onboardingSessions?.length ?? 0) > 0,
+      onboardingPhase: (company?.onboardingPhase as OnboardingPhase | undefined) ?? undefined,
     }
   }
 

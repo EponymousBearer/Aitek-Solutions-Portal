@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { useRouter } from 'next/navigation'
 
-import { type CreateCompanyInput, createCompanySchema } from '@aitek/types'
+import { type CreateCompanyInput, createCompanySchema, OnboardingPhase } from '@aitek/types'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useQueryClient } from '@tanstack/react-query'
 import { Building2, Check, Globe, Loader2, Users } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 
@@ -15,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { useOnboardingPhaseGuard } from '@/hooks/useOnboardingProgress'
 import { api } from '@/lib/api'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -178,7 +180,9 @@ interface ExistingCompany {
 
 export default function CompanyPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { isAdmin, isAitekTeam, isLoading: userLoading } = useCurrentUser()
+  const { ready, reviewMode } = useOnboardingPhaseGuard(OnboardingPhase.COMPANY)
 
   useEffect(() => {
     if (!userLoading && (isAdmin || isAitekTeam)) {
@@ -315,6 +319,14 @@ export default function CompanyPage() {
     setSubmitError(null)
     try {
       await api.put('/companies/me', watch())
+      if (reviewMode) {
+        router.push('/onboarding/review')
+        return
+      }
+      // Submit & lock the company phase, advancing the pointer to KYC.
+      await api.post('/onboarding/advance')
+      await queryClient.invalidateQueries({ queryKey: ['onboarding-progress'] })
+      await queryClient.invalidateQueries({ queryKey: ['current-user'] })
       router.push('/onboarding/kyc')
     } catch (err) {
       setSubmitError(extractError(err))
@@ -323,8 +335,21 @@ export default function CompanyPage() {
     }
   }
 
+  if (!ready) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
   return (
     <ChatShell currentStep="company">
+      {reviewMode && (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
+          You&apos;re editing this section. Save to return to your review.
+        </div>
+      )}
       {step === 1 && (
         <BotBubble>
           Hi! I&apos;m here to set up your AiTek workspace. First, tell me a bit about your company.
@@ -554,7 +579,11 @@ export default function CompanyPage() {
                 </Button>
                 <Button type="submit" className="flex-1" disabled={saving}>
                   {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {saving ? 'Continuing…' : 'Continue to identity verification'}
+                  {saving
+                    ? 'Saving…'
+                    : reviewMode
+                      ? 'Save & return to review'
+                      : 'Continue to identity verification'}
                 </Button>
               </div>
             </form>

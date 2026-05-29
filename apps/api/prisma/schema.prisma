@@ -72,6 +72,19 @@ enum OnboardingStatus {
   ABANDONED
 }
 
+// Authoritative pointer for where a company is in the onboarding flow.
+// Drives client routing, server-side phase locking, and the admin progress view.
+// Ordered: a phase before the current one is locked; REVIEW unlocks all phases
+// for one final edit pass; SUBMITTED is the locked "under review" terminal state.
+enum OnboardingPhase {
+  COMPANY
+  KYC
+  SERVICES
+  QUESTIONNAIRE
+  REVIEW
+  SUBMITTED
+}
+
 enum QuestionType {
   TEXT
   LONG_TEXT
@@ -256,6 +269,8 @@ model Company {
   portalAccessGranted Boolean      @default(false)
   riskLevel           KYCRiskLevel @default(UNSET)
   tags                String[]     @default([])
+  onboardingPhase     OnboardingPhase @default(COMPANY)
+  submittedForReviewAt DateTime?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -277,6 +292,7 @@ model Company {
   @@index([slug])
   @@index([kycStatus])
   @@index([portalAccessGranted])
+  @@index([onboardingPhase])
   @@map("companies")
 }
 

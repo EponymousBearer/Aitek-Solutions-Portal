@@ -83,6 +83,15 @@ export enum OnboardingStatus {
   ABANDONED = 'ABANDONED',
 }
 
+export enum OnboardingPhase {
+  COMPANY = 'COMPANY',
+  KYC = 'KYC',
+  SERVICES = 'SERVICES',
+  QUESTIONNAIRE = 'QUESTIONNAIRE',
+  REVIEW = 'REVIEW',
+  SUBMITTED = 'SUBMITTED',
+}
+
 export enum QuestionType {
   TEXT = 'TEXT',
   LONG_TEXT = 'LONG_TEXT',

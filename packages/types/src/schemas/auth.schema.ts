@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { CompanyMembershipRole, KYCStatus, UserRole } from '../enums'
+import { CompanyMembershipRole, KYCStatus, OnboardingPhase, UserRole } from '../enums'
 
 export const inviteSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -37,6 +37,7 @@ export const authUserSchema = z.object({
   kycStatus: z.nativeEnum(KYCStatus).optional(),
   hasSelectedServices: z.boolean().optional(),
   onboardingComplete: z.boolean().optional(),
+  onboardingPhase: z.nativeEnum(OnboardingPhase).optional(),
 })
 
 export type AuthUser = z.infer<typeof authUserSchema>

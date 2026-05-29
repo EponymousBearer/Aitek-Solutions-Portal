@@ -1,10 +1,12 @@
 
-import { CompanyMembershipRole, OnboardingStatus, UserRole } from '@aitek/types'
+import { CompanyMembershipRole, KYCStatus, OnboardingPhase, UserRole } from '@aitek/types'
 import type { AuthUser, CreateCompanyInput, UpdateCompanyInput } from '@aitek/types'
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common'
 
@@ -12,9 +14,12 @@ import { PrismaService } from '../../prisma/prisma.service'
 import { AuthService } from '../auth/auth.service'
 import { ClerkMetadataSyncService } from '../auth/clerk-metadata-sync.service'
 import { EmailService } from '../notifications/email.service'
+import { assertPhaseEditable, computeProgress } from '../onboarding/onboarding-phase'
 
 @Injectable()
 export class CompaniesService {
+  private readonly logger = new Logger(CompaniesService.name)
+
   constructor(
     private prisma: PrismaService,
     private authService: AuthService,
@@ -30,28 +35,160 @@ export class CompaniesService {
     }
   }
 
+  private clientListInclude = {
+    memberships: {
+      where: { isActive: true, role: CompanyMembershipRole.CLIENT_ADMIN },
+      take: 1,
+      include: {
+        user: {
+          select: { id: true, email: true, firstName: true, lastName: true },
+        },
+      },
+    },
+    _count: { select: { selectedServices: true } },
+  } as const
+
   async listPendingApprovals(user: AuthUser) {
     this.assertAitekTeam(user)
 
     return this.prisma.company.findMany({
       where: {
         portalAccessGranted: false,
-        onboardingSessions: { some: { status: OnboardingStatus.COMPLETED } },
+        onboardingPhase: OnboardingPhase.SUBMITTED,
       },
+      include: this.clientListInclude,
+      orderBy: { submittedForReviewAt: 'desc' },
+    })
+  }
+
+  // Admin: full detail for a single client — everything they submitted across
+  // onboarding (company profile, KYC docs, selected services, questionnaire
+  // answers) plus the derived progress.
+  async getCompanyDetail(companyId: string, user: AuthUser) {
+    this.assertAitekTeam(user)
+
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      include: {
+        memberships: {
+          where: { isActive: true },
+          include: {
+            user: { select: { id: true, email: true, firstName: true, lastName: true, role: true } },
+          },
+          orderBy: { joinedAt: 'asc' },
+        },
+        selectedServices: {
+          include: { service: { select: { id: true, name: true, slug: true } } },
+        },
+        kycSubmissions: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: { documents: { orderBy: { createdAt: 'asc' } } },
+        },
+        onboardingSessions: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: {
+            responses: {
+              include: {
+                answers: {
+                  include: { question: { select: { id: true, text: true, sortOrder: true } } },
+                  orderBy: { question: { sortOrder: 'asc' } },
+                },
+                template: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+      },
+    })
+    if (!company) throw new NotFoundException('Company not found')
+
+    return { ...company, progress: computeProgress(company) }
+  }
+
+  // Admin onboarding overview: every company that has started onboarding, with a
+  // derived progress checklist + overall % so admins can see how far each got.
+  async listOnboardingClients(user: AuthUser) {
+    this.assertAitekTeam(user)
+
+    const companies = await this.prisma.company.findMany({
+      where: { deletedAt: null },
+      include: this.clientListInclude,
+      orderBy: { createdAt: 'desc' },
+    })
+
+    return companies.map((c) => ({ ...c, progress: computeProgress(c) }))
+  }
+
+  // Admin "request changes": re-open a single submitted phase for the client to
+  // fix. Clears the finalized timestamp; for KYC also resets the latest
+  // submission to PENDING so documents can be replaced.
+  async reopenPhase(companyId: string, phase: OnboardingPhase, user: AuthUser) {
+    this.assertAitekTeam(user)
+
+    const reopenable: OnboardingPhase[] = [
+      OnboardingPhase.COMPANY,
+      OnboardingPhase.KYC,
+      OnboardingPhase.SERVICES,
+      OnboardingPhase.QUESTIONNAIRE,
+    ]
+    if (!reopenable.includes(phase)) {
+      throw new BadRequestException('That phase cannot be reopened')
+    }
+
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
       include: {
         memberships: {
           where: { isActive: true, role: CompanyMembershipRole.CLIENT_ADMIN },
           take: 1,
-          include: {
-            user: {
-              select: { id: true, email: true, firstName: true, lastName: true },
-            },
-          },
+          include: { user: { select: { email: true, firstName: true } } },
         },
-        _count: { select: { selectedServices: true } },
       },
-      orderBy: { createdAt: 'desc' },
     })
+    if (!company) throw new NotFoundException('Company not found')
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.company.update({
+        where: { id: companyId },
+        data: {
+          onboardingPhase: phase,
+          submittedForReviewAt: null,
+          portalAccessGranted: false,
+          ...(phase === OnboardingPhase.KYC
+            ? { kycStatus: KYCStatus.RESUBMISSION_REQUIRED }
+            : {}),
+        },
+      })
+
+      if (phase === OnboardingPhase.KYC) {
+        const latest = await tx.kYCSubmission.findFirst({
+          where: { companyId },
+          orderBy: { createdAt: 'desc' },
+        })
+        if (latest) {
+          await tx.kYCSubmission.update({
+            where: { id: latest.id },
+            data: { status: KYCStatus.PENDING, resubmissionCount: { increment: 1 } },
+          })
+        }
+      }
+    })
+
+    const admin = company.memberships[0]?.user
+    if (admin) {
+      const onboardingUrl = `${process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000'}/onboarding`
+      void this.emailService.sendChangesRequestedEmail(
+        admin.email,
+        admin.firstName,
+        phase,
+        onboardingUrl,
+      )
+    }
+
+    this.logger.log(`Reopened phase=${phase} for company=${companyId} by user=${user.id}`)
+    return { reopened: true, phase }
   }
 
   async approveCompany(companyId: string, user: AuthUser) {
@@ -74,10 +211,17 @@ export class CompaniesService {
       throw new ConflictException('Company is already approved')
     }
 
-    await this.prisma.company.update({
-      where: { id: companyId },
-      data: { portalAccessGranted: true, kycStatus: 'APPROVED' },
-    })
+    await this.prisma.$transaction([
+      this.prisma.company.update({
+        where: { id: companyId },
+        data: { portalAccessGranted: true, kycStatus: KYCStatus.APPROVED },
+      }),
+      // Keep the KYC submission in sync so it leaves the review queue.
+      this.prisma.kYCSubmission.updateMany({
+        where: { companyId, status: { in: [KYCStatus.UNDER_REVIEW, KYCStatus.PENDING] } },
+        data: { status: KYCStatus.APPROVED, reviewedById: user.id, reviewedAt: new Date() },
+      }),
+    ])
 
     const admin = company.memberships[0]?.user
     if (admin) {
@@ -151,6 +295,12 @@ export class CompaniesService {
     if (user.companyMembershipRole !== CompanyMembershipRole.CLIENT_ADMIN) {
       throw new ForbiddenException('Only company admins can update company profile')
     }
+
+    const company = await this.prisma.company.findUniqueOrThrow({
+      where: { id: user.companyId },
+      select: { onboardingPhase: true },
+    })
+    assertPhaseEditable(company, OnboardingPhase.COMPANY)
 
     return this.prisma.company.update({
       where: { id: user.companyId },

@@ -27,14 +27,31 @@ export function QuestionInput({
   question,
   onSubmit,
   disabled,
+  initialValue,
 }: {
   question: QuestionLike
   onSubmit: (value: unknown) => void
   disabled?: boolean
+  // Pre-fills the control when re-editing an existing answer (review mode).
+  initialValue?: unknown
 }) {
-  const [text, setText] = useState('')
-  const [picked, setPicked] = useState<string[]>([])
-  const [budget, setBudget] = useState(question.budgetMin ?? 0)
+  const [text, setText] = useState(
+    typeof initialValue === 'string'
+      ? initialValue
+      : typeof initialValue === 'number'
+        ? String(initialValue)
+        : '',
+  )
+  const [picked, setPicked] = useState<string[]>(
+    Array.isArray(initialValue)
+      ? initialValue.map(String)
+      : typeof initialValue === 'string' && initialValue
+        ? [initialValue]
+        : [],
+  )
+  const [budget, setBudget] = useState(
+    typeof initialValue === 'number' ? initialValue : (question.budgetMin ?? 0),
+  )
 
   const submitText = () => {
     if (!text.trim()) return

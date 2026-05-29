@@ -1,5 +1,5 @@
 
-import { CompanyMembershipRole, UserRole } from '@aitek/types'
+import { CompanyMembershipRole, OnboardingPhase, UserRole } from '@aitek/types'
 import type { AuthUser, CreateCompanyInput, UpdateCompanyInput } from '@aitek/types'
 import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common'
 
@@ -27,10 +27,32 @@ export class CompaniesController {
     return this.companiesService.listPendingApprovals(user)
   }
 
+  @Get('onboarding')
+  @Roles(UserRole.AITEK_ADMIN, UserRole.AITEK_TEAM_MEMBER)
+  async listOnboarding(@CurrentUser() user: AuthUser) {
+    return this.companiesService.listOnboardingClients(user)
+  }
+
   @Post(':id/approve')
   @Roles(UserRole.AITEK_ADMIN, UserRole.AITEK_TEAM_MEMBER)
   async approve(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.companiesService.approveCompany(id, user)
+  }
+
+  @Post(':id/reopen')
+  @Roles(UserRole.AITEK_ADMIN, UserRole.AITEK_TEAM_MEMBER)
+  async reopen(
+    @Param('id') id: string,
+    @Body() body: { phase: OnboardingPhase },
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.companiesService.reopenPhase(id, body.phase, user)
+  }
+
+  @Get(':id/detail')
+  @Roles(UserRole.AITEK_ADMIN, UserRole.AITEK_TEAM_MEMBER)
+  async detail(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.companiesService.getCompanyDetail(id, user)
   }
 
   @Get('me')

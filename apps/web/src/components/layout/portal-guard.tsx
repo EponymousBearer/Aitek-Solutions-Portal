@@ -4,32 +4,26 @@ import { useEffect } from 'react'
 
 import { useRouter } from 'next/navigation'
 
-import { KYCStatus } from '@aitek/types'
+import type { OnboardingPhase } from '@aitek/types'
 import { useAuth } from '@clerk/nextjs'
 
 import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { routeForPhase } from '@/lib/onboarding'
 
-// Step-aware portal gate. Decision tree (locked in planning/25 §1b):
-//   1. Aitek team (admin / team member) → /admin (their home; no client portal).
-//   2. No companyId → /onboarding/company
-//   3. kycStatus === NOT_STARTED → /onboarding/kyc
-//   4. !hasSelectedServices → /onboarding/services
-//   5. !onboardingComplete → /onboarding/questionnaire
-//   6. !portalAccessGranted → /onboarding/pending (KYC review pending screen)
-//   7. otherwise pass through
+// Step-aware portal gate driven by the authoritative onboarding phase pointer:
+//   1. Aitek team → /admin (handled by the caller, not here).
+//   2. Approved (portalAccessGranted) → pass through to the portal.
+//   3. No company yet → /onboarding/company.
+//   4. Otherwise → the page that owns the client's current phase
+//      (REVIEW → /onboarding/review, SUBMITTED → /onboarding/pending).
 function nextStep(user: {
   companyId?: string
-  kycStatus?: KYCStatus
-  hasSelectedServices?: boolean
-  onboardingComplete?: boolean
+  onboardingPhase?: OnboardingPhase
   portalAccessGranted?: boolean
 }): string | null {
+  if (user.portalAccessGranted) return null
   if (!user.companyId) return '/onboarding/company'
-  if (!user.kycStatus || user.kycStatus === KYCStatus.NOT_STARTED) return '/onboarding/kyc'
-  if (!user.hasSelectedServices) return '/onboarding/services'
-  if (!user.onboardingComplete) return '/onboarding/questionnaire'
-  if (!user.portalAccessGranted) return '/onboarding/pending'
-  return null
+  return routeForPhase(user.onboardingPhase)
 }
 
 export function PortalGuard({ children }: { children: React.ReactNode }) {

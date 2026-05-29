@@ -19,6 +19,33 @@ export class EmailService {
     await this.send(to, subject, html)
   }
 
+  async sendChangesRequestedEmail(
+    to: string,
+    firstName: string,
+    phaseLabel: string,
+    onboardingUrl: string,
+  ): Promise<void> {
+    const subject = 'Action needed on your AiTek onboarding'
+    const safeName = (firstName || 'there').replace(/</g, '&lt;')
+    const safePhase = String(phaseLabel).replace(/</g, '&lt;')
+    const html = `
+      <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#0f172a;">
+        <h2 style="margin:0 0 16px;">We need a quick update</h2>
+        <p>Hi ${safeName},</p>
+        <p>Our team reviewed your submission and asked for changes to the
+           <strong>${safePhase}</strong> section. Please sign in and update it, then resubmit.</p>
+        <p style="margin:24px 0;">
+          <a href="${onboardingUrl}"
+             style="display:inline-block;background:#0f172a;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:500;">
+            Update my onboarding
+          </a>
+        </p>
+        <p style="color:#64748b;font-size:13px;">&mdash; The AiTek team</p>
+      </div>
+    `
+    await this.send(to, subject, html)
+  }
+
   private renderApprovalHtml(firstName: string, portalUrl: string): string {
     const safeName = (firstName || 'there').replace(/</g, '&lt;')
     return `

@@ -29,6 +29,23 @@ export class OnboardingController {
     return this.onboarding.getSessionMe(user)
   }
 
+  @Get('progress')
+  async getProgress(@CurrentUser() user: AuthUser) {
+    return this.onboarding.getProgress(user)
+  }
+
+  // Submit & lock the company phase, advancing the pointer to KYC.
+  @Post('advance')
+  async advance(@CurrentUser() user: AuthUser) {
+    return this.onboarding.completeCompanyPhase(user)
+  }
+
+  // Final, irreversible submit from the REVIEW step.
+  @Post('finalize')
+  async finalize(@CurrentUser() user: AuthUser) {
+    return this.onboarding.finalize(user)
+  }
+
   @Get('services')
   async getMySelectedServices(@CurrentUser() user: AuthUser) {
     return this.onboarding.getSelectedServices(user)
