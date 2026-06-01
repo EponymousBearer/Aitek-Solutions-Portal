@@ -253,12 +253,16 @@ function collectSlugs() {
   return { categorySlugs, serviceSlugs }
 }
 
-// Upsert a template's questions using a deterministic id so re-running the seed
-// is idempotent (no duplicate rows).
-async function upsertQuestions(templateId: string, questions: SeedQuestion[]) {
-  for (const [i, q] of questions.entries()) {
-    const id = `seed-${templateId}-${i}`
-    const data = {
+// Seed a template's questions only when it has none yet. After this initial
+// bootstrap the admin owns the questions (via /admin/questionnaires), so the
+// seed never overwrites, reorders, or deletes them — admin edits survive every
+// deploy. New templates (e.g. a freshly added service) still get seeded.
+async function seedQuestionsIfEmpty(templateId: string, questions: SeedQuestion[]) {
+  const existing = await prisma.question.count({ where: { templateId } })
+  if (existing > 0) return
+
+  await prisma.question.createMany({
+    data: questions.map((q, i) => ({
       templateId,
       text: q.text,
       type: q.type,
@@ -272,17 +276,7 @@ async function upsertQuestions(templateId: string, questions: SeedQuestion[]) {
       budgetMax: q.budgetMax ?? null,
       budgetStep: q.budgetStep ?? null,
       budgetCurrency: q.budgetCurrency ?? null,
-    }
-    await prisma.question.upsert({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      where: { id: id as any },
-      update: data,
-      create: { id, ...data },
-    })
-  }
-  // Drop any stale questions from a previous, longer version of this template.
-  await prisma.question.deleteMany({
-    where: { templateId, sortOrder: { gte: questions.length } },
+    })),
   })
 }
 
@@ -345,7 +339,7 @@ async function seedServiceCatalog() {
           createdById: 'seed',
         },
       })
-      await upsertQuestions(template.id, svc.questions)
+      await seedQuestionsIfEmpty(template.id, svc.questions)
     }
   }
 
@@ -375,7 +369,7 @@ async function seedSharedQuestionnaire() {
       createdById: 'seed',
     },
   })
-  await upsertQuestions(template.id, SHARED_QUESTIONS)
+  await seedQuestionsIfEmpty(template.id, SHARED_QUESTIONS)
 
   console.log('✓ Shared questionnaire seeded')
 }
