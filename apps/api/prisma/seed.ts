@@ -1,4 +1,10 @@
-import { PrismaClient, UserRole, UserStatus } from '@prisma/client'
+import {
+  CompanyMembershipRole,
+  PrismaClient,
+  ProjectStatus,
+  UserRole,
+  UserStatus,
+} from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
 import { config } from 'dotenv'
@@ -414,11 +420,48 @@ async function seedAdminUser() {
   console.log(`✓ Admin user seeded (clerkId binds on first sign-up): ${email}`)
 }
 
+// Every approved client should have at least one project (the PRD flow creates
+// one at approval). Backfill any approved company that predates that behaviour
+// so existing clients see a project. Idempotent — skips companies that already
+// have one.
+async function backfillProjectsForApprovedCompanies() {
+  const companies = await prisma.company.findMany({
+    where: { portalAccessGranted: true, deletedAt: null, projects: { none: {} } },
+    include: {
+      memberships: {
+        where: { isActive: true, role: CompanyMembershipRole.CLIENT_ADMIN },
+        take: 1,
+        select: { userId: true },
+      },
+    },
+  })
+
+  let created = 0
+  for (const c of companies) {
+    const createdById = c.memberships[0]?.userId
+    if (!createdById) continue
+    const slug = `${c.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'project'}-${Math.random().toString(36).slice(2, 7)}`
+    await prisma.project.create({
+      data: {
+        companyId: c.id,
+        name: c.name,
+        slug,
+        description: 'Initial engagement created from onboarding.',
+        status: ProjectStatus.DISCOVERY,
+        createdById,
+      },
+    })
+    created++
+  }
+  console.log(`✓ Backfilled projects for ${created} approved compan${created === 1 ? 'y' : 'ies'}`)
+}
+
 async function main() {
   console.log('Starting seed...')
   await seedServiceCatalog()
   await seedSharedQuestionnaire()
   await seedAdminUser()
+  await backfillProjectsForApprovedCompanies()
   console.log('Seed complete ✓')
 }
 
