@@ -11,271 +11,367 @@ config({ path: path.join(__dirname, '../.env') })
 const adapter = new PrismaPg(new Pool({ connectionString: process.env['DATABASE_URL'] }) as any)
 const prisma = new PrismaClient({ adapter } as ConstructorParameters<typeof PrismaClient>[0])
 
-const SERVICE_CATEGORIES = [
+// ─────────────────────────────────────────────────────────────────────────────
+// Service catalog + service-scoped questionnaires.
+//
+// The catalog mirrors the PRD's 10 service groups. Each service carries its own
+// suggested-question set (PRD §5), which becomes a service-scoped
+// QuestionnaireTemplate. At onboarding time the questionnaire is assembled
+// dynamically from the question sets of whatever services the client selected,
+// plus a shared "Project basics" template (budget / timeline / anything-else).
+// ─────────────────────────────────────────────────────────────────────────────
+
+type SeedQuestion = {
+  text: string
+  type:
+    | 'TEXT'
+    | 'LONG_TEXT'
+    | 'MULTIPLE_CHOICE'
+    | 'CHECKBOX'
+    | 'BUDGET_SLIDER'
+    | 'TIMELINE_SELECTOR'
+    | 'TEAM_SIZE'
+    | 'URL_INPUT'
+  isRequired?: boolean
+  helpText?: string
+  options?: string[]
+  timelineOptions?: string[]
+  budgetMin?: number
+  budgetMax?: number
+  budgetStep?: number
+  budgetCurrency?: string
+}
+
+type SeedService = {
+  name: string
+  slug: string
+  icon: string
+  description: string
+  questions: SeedQuestion[]
+}
+
+type SeedCategory = {
+  name: string
+  slug: string
+  description: string
+  services: SeedService[]
+}
+
+// Shared questions every onboarding ends with, regardless of services selected.
+const SHARED_QUESTIONS: SeedQuestion[] = [
   {
-    name: 'IT Systems & Application Development',
-    slug: 'it-systems-app-development',
-    description: 'Custom software, web and mobile applications, enterprise systems',
+    text: 'What is your estimated budget range for this engagement?',
+    type: 'BUDGET_SLIDER',
+    isRequired: true,
+    budgetMin: 5000,
+    budgetMax: 500000,
+    budgetStep: 5000,
+    budgetCurrency: 'USD',
+  },
+  {
+    text: 'What is your target timeline to get started?',
+    type: 'TIMELINE_SELECTOR',
+    isRequired: true,
+    timelineOptions: ['ASAP', '< 1 month', '1-3 months', '3-6 months', '6-12 months', 'Just exploring'],
+  },
+  {
+    text: 'Anything else we should know before we put together a proposal?',
+    type: 'LONG_TEXT',
+    isRequired: false,
+    helpText: 'Optional — constraints, must-haves, context, anything at all.',
+  },
+]
+
+const CATALOG: SeedCategory[] = [
+  {
+    name: 'Brand & Growth',
+    slug: 'brand-growth',
+    description: 'Brand identity, positioning, and customer acquisition',
     services: [
-      { name: 'Custom Web Application', slug: 'custom-web-app', icon: 'globe' },
-      { name: 'Mobile App Development', slug: 'mobile-app-dev', icon: 'smartphone' },
-      { name: 'Enterprise Software Integration', slug: 'enterprise-integration', icon: 'layers' },
-      { name: 'API Development & Integration', slug: 'api-development', icon: 'code-2' },
+      {
+        name: 'Branding & Business Growth',
+        slug: 'branding-business-growth',
+        icon: 'sparkles',
+        description: 'Brand identity development, premium positioning, patient/customer acquisition strategy',
+        questions: [
+          { text: 'Do you already have branding in place?', type: 'MULTIPLE_CHOICE', options: ['Yes, established', 'Partially', 'No, starting fresh'] },
+          { text: 'Who is your target audience?', type: 'LONG_TEXT' },
+          { text: 'What marketing channels are you using today?', type: 'LONG_TEXT' },
+          { text: 'Do you have existing brand guidelines?', type: 'MULTIPLE_CHOICE', options: ['Yes', 'No'] },
+          { text: 'Who are your main competitors?', type: 'LONG_TEXT', isRequired: false },
+        ],
+      },
     ],
   },
   {
-    name: 'AI & Machine Learning',
-    slug: 'ai-machine-learning',
-    description: 'AI-powered solutions, automation, and intelligent systems',
+    name: 'Facilities & Experience',
+    slug: 'facilities-experience',
+    description: 'Physical buildouts and patient/customer experience systems',
     services: [
-      { name: 'AI Chatbot & Virtual Assistant', slug: 'ai-chatbot', icon: 'bot' },
-      { name: 'Predictive Analytics', slug: 'predictive-analytics', icon: 'trending-up' },
-      { name: 'Document Intelligence', slug: 'document-intelligence', icon: 'file-search' },
-      { name: 'Process Automation (RPA)', slug: 'rpa', icon: 'cog' },
+      {
+        name: 'Practice / Business Setup & Physical Infrastructure',
+        slug: 'practice-setup-infrastructure',
+        icon: 'building-2',
+        description: 'Practice buildouts and facility experience design',
+        questions: [
+          { text: 'Is this a new setup or a renovation?', type: 'MULTIPLE_CHOICE', options: ['New setup', 'Renovation'] },
+          { text: 'What is the approximate facility size?', type: 'TEXT', helpText: 'e.g. 2,500 sq ft, 8 treatment rooms' },
+          { text: 'What aesthetic or experience are you going for?', type: 'LONG_TEXT' },
+        ],
+      },
+      {
+        name: 'Patient / Customer Experience Systems',
+        slug: 'patient-customer-experience',
+        icon: 'heart-handshake',
+        description: 'Appointments, communication, CRM, and engagement systems',
+        questions: [
+          { text: 'What appointment system do you use today?', type: 'TEXT', isRequired: false },
+          { text: 'How do you communicate with patients/customers today?', type: 'LONG_TEXT' },
+          { text: 'What is your current no-show / drop-off rate?', type: 'TEXT', isRequired: false },
+          { text: 'What CRM systems are you using?', type: 'TEXT', isRequired: false },
+        ],
+      },
     ],
   },
   {
-    name: 'Cloud & Infrastructure',
-    slug: 'cloud-infrastructure',
-    description: 'Cloud migration, DevOps, and infrastructure management',
+    name: 'Technology & Engineering',
+    slug: 'technology-engineering',
+    description: 'Software, cloud, and data engineering',
     services: [
-      { name: 'Cloud Migration', slug: 'cloud-migration', icon: 'cloud-upload' },
-      { name: 'DevOps & CI/CD', slug: 'devops-cicd', icon: 'git-merge' },
-      { name: 'Infrastructure as Code', slug: 'infrastructure-as-code', icon: 'server' },
+      {
+        name: 'IT Systems & Application Development',
+        slug: 'it-systems-app-development',
+        icon: 'code-2',
+        description: 'Custom applications, practice management systems, integrations, CMS development',
+        questions: [
+          { text: 'What existing software are you running?', type: 'LONG_TEXT' },
+          { text: 'What integrations do you need?', type: 'LONG_TEXT', isRequired: false },
+          { text: 'Which platforms do you need?', type: 'CHECKBOX', options: ['Web', 'iOS', 'Android', 'Desktop', 'API only'] },
+          { text: 'How many users will use the system?', type: 'TEAM_SIZE' },
+          { text: 'Any compliance requirements?', type: 'LONG_TEXT', isRequired: false },
+          { text: 'Is a mobile app needed?', type: 'MULTIPLE_CHOICE', options: ['Yes', 'No', 'Maybe'] },
+        ],
+      },
+      {
+        name: 'Cloud & Infrastructure Solutions',
+        slug: 'cloud-infrastructure',
+        icon: 'cloud',
+        description: 'Cloud migration, infrastructure, scaling, and reliability',
+        questions: [
+          { text: 'What is your current cloud provider (if any)?', type: 'TEXT', isRequired: false },
+          { text: 'Are you on-premise, cloud, or hybrid today?', type: 'MULTIPLE_CHOICE', options: ['On-premise', 'Cloud', 'Hybrid', 'Not sure'] },
+          { text: 'What are your current infrastructure pain points?', type: 'LONG_TEXT' },
+          { text: 'What are your scaling requirements?', type: 'LONG_TEXT', isRequired: false },
+          { text: 'Any specific security concerns?', type: 'LONG_TEXT', isRequired: false },
+        ],
+      },
+      {
+        name: 'Data, AI & Analytics',
+        slug: 'data-ai-analytics',
+        icon: 'brain-circuit',
+        description: 'Data platforms, AI use cases, reporting, and automation',
+        questions: [
+          { text: 'What data systems do you have today?', type: 'LONG_TEXT' },
+          { text: 'What AI use cases are you interested in?', type: 'LONG_TEXT' },
+          { text: 'What are your reporting needs?', type: 'LONG_TEXT', isRequired: false },
+          { text: 'Roughly how much data are you working with?', type: 'TEXT', isRequired: false, helpText: 'e.g. GB/TB, rows, records' },
+          { text: 'What automation goals do you have?', type: 'LONG_TEXT', isRequired: false },
+        ],
+      },
     ],
   },
   {
-    name: 'Cybersecurity',
-    slug: 'cybersecurity',
-    description: 'Security assessments, compliance, and threat protection',
+    name: 'Security & Compliance',
+    slug: 'security-compliance',
+    description: 'Cybersecurity, compliance, and governance',
     services: [
-      { name: 'Security Assessment & Audit', slug: 'security-audit', icon: 'shield-check' },
-      { name: 'Compliance Consulting (HIPAA/SOC2)', slug: 'compliance', icon: 'file-badge' },
-      { name: 'Penetration Testing', slug: 'pen-testing', icon: 'bug' },
+      {
+        name: 'Cybersecurity & Compliance',
+        slug: 'cybersecurity-compliance',
+        icon: 'shield-check',
+        description: 'Security assessments, compliance programs, governance, and audits',
+        questions: [
+          { text: 'Which compliance frameworks apply to you?', type: 'CHECKBOX', options: ['HIPAA', 'SOC 2', 'GDPR', 'PCI-DSS', 'ISO 27001', 'Other', 'Not sure'] },
+          { text: 'What security tools do you have in place?', type: 'LONG_TEXT', isRequired: false },
+          { text: 'Have you had any previous breaches or incidents?', type: 'MULTIPLE_CHOICE', options: ['Yes', 'No', 'Not sure'] },
+          { text: 'Do you have data governance policies today?', type: 'LONG_TEXT', isRequired: false },
+          { text: 'What are your audit requirements?', type: 'LONG_TEXT', isRequired: false },
+        ],
+      },
     ],
   },
   {
-    name: 'Data & Analytics',
-    slug: 'data-analytics',
-    description: 'Data engineering, BI dashboards, and analytics platforms',
+    name: 'Operations & Advisory',
+    slug: 'operations-advisory',
+    description: 'Digital workplace, strategy, and industry-specific solutions',
     services: [
-      { name: 'Business Intelligence & Dashboards', slug: 'bi-dashboards', icon: 'bar-chart-2' },
-      { name: 'Data Warehouse & ETL', slug: 'data-warehouse', icon: 'database' },
-      { name: 'Real-time Analytics', slug: 'realtime-analytics', icon: 'activity' },
-    ],
-  },
-  {
-    name: 'Healthcare IT',
-    slug: 'healthcare-it',
-    description: 'HIPAA-compliant systems, EHR integrations, telehealth platforms',
-    services: [
-      { name: 'EHR Integration & Interoperability', slug: 'ehr-integration', icon: 'heart-pulse' },
-      { name: 'Telehealth Platform', slug: 'telehealth', icon: 'video' },
-      { name: 'Patient Portal Development', slug: 'patient-portal', icon: 'user-check' },
-    ],
-  },
-  {
-    name: 'E-Commerce & Digital Commerce',
-    slug: 'ecommerce',
-    description: 'Online stores, payment systems, and commerce platforms',
-    services: [
-      { name: 'E-Commerce Platform', slug: 'ecommerce-platform', icon: 'shopping-cart' },
-      { name: 'Payment Integration', slug: 'payment-integration', icon: 'credit-card' },
-      { name: 'Inventory & Order Management', slug: 'inventory-management', icon: 'package' },
-    ],
-  },
-  {
-    name: 'UI/UX Design',
-    slug: 'ui-ux-design',
-    description: 'User research, product design, and design systems',
-    services: [
-      { name: 'Product Design & Prototyping', slug: 'product-design', icon: 'pen-tool' },
-      { name: 'Design System Creation', slug: 'design-system', icon: 'layout-template' },
-      { name: 'UX Research & Audit', slug: 'ux-research', icon: 'search' },
-    ],
-  },
-  {
-    name: 'Staff Augmentation',
-    slug: 'staff-augmentation',
-    description: 'Dedicated developers, team extension, and technical consulting',
-    services: [
-      { name: 'Dedicated Development Team', slug: 'dedicated-team', icon: 'users' },
-      { name: 'Technical Consulting', slug: 'technical-consulting', icon: 'lightbulb' },
-    ],
-  },
-  {
-    name: 'Managed Services',
-    slug: 'managed-services',
-    description: 'Ongoing support, maintenance, and monitoring',
-    services: [
-      { name: 'Application Support & Maintenance', slug: 'app-maintenance', icon: 'wrench' },
-      { name: 'Managed Cloud Operations', slug: 'managed-cloud', icon: 'cloud-cog' },
-      { name: '24/7 Monitoring & Incident Response', slug: 'monitoring', icon: 'bell' },
+      {
+        name: 'Digital Workplace & Operations',
+        slug: 'digital-workplace-operations',
+        icon: 'workflow',
+        description: 'Collaboration tooling, ERP, and operational workflow improvements',
+        questions: [
+          { text: 'What collaboration tools do you currently use?', type: 'LONG_TEXT' },
+          { text: 'What ERP systems are in place?', type: 'TEXT', isRequired: false },
+          { text: 'Where are your biggest workflow bottlenecks?', type: 'LONG_TEXT' },
+          { text: 'Which departments are involved?', type: 'LONG_TEXT', isRequired: false },
+        ],
+      },
+      {
+        name: 'Consulting & Strategy',
+        slug: 'consulting-strategy',
+        icon: 'compass',
+        description: 'Growth strategy, operational advisory, and expansion planning',
+        questions: [
+          { text: 'What are your primary growth goals?', type: 'LONG_TEXT' },
+          { text: 'What operational issues are you facing today?', type: 'LONG_TEXT' },
+          { text: 'Do you have expansion plans?', type: 'LONG_TEXT', isRequired: false },
+          { text: 'What business KPIs matter most to you?', type: 'LONG_TEXT', isRequired: false },
+        ],
+      },
+      {
+        name: 'Industry-Specific Solutions',
+        slug: 'industry-specific',
+        icon: 'factory',
+        description: 'Manufacturing, supply chain, IoT, and vertical-specific automation',
+        questions: [
+          { text: 'Describe your core manufacturing / operational processes.', type: 'LONG_TEXT' },
+          { text: 'What supply chain software do you use?', type: 'TEXT', isRequired: false },
+          { text: 'Do you use IoT / connected devices?', type: 'MULTIPLE_CHOICE', options: ['Yes', 'No', 'Exploring'] },
+          { text: 'What factory / process automation needs do you have?', type: 'LONG_TEXT', isRequired: false },
+        ],
+      },
     ],
   },
 ]
 
+const SHARED_TEMPLATE_SLUG = 'project-basics-v1'
+
+function collectSlugs() {
+  const categorySlugs = CATALOG.map((c) => c.slug)
+  const serviceSlugs = CATALOG.flatMap((c) => c.services.map((s) => s.slug))
+  return { categorySlugs, serviceSlugs }
+}
+
+// Seed a template's questions only when it has none yet. After this initial
+// bootstrap the admin owns the questions (via /admin/questionnaires), so the
+// seed never overwrites, reorders, or deletes them — admin edits survive every
+// deploy. New templates (e.g. a freshly added service) still get seeded.
+async function seedQuestionsIfEmpty(templateId: string, questions: SeedQuestion[]) {
+  const existing = await prisma.question.count({ where: { templateId } })
+  if (existing > 0) return
+
+  await prisma.question.createMany({
+    data: questions.map((q, i) => ({
+      templateId,
+      text: q.text,
+      type: q.type,
+      section: null,
+      isRequired: q.isRequired ?? true,
+      sortOrder: i,
+      helpText: q.helpText ?? null,
+      options: q.options ?? undefined,
+      timelineOptions: q.timelineOptions ?? undefined,
+      budgetMin: q.budgetMin ?? null,
+      budgetMax: q.budgetMax ?? null,
+      budgetStep: q.budgetStep ?? null,
+      budgetCurrency: q.budgetCurrency ?? null,
+    })),
+  })
+}
+
 async function seedServiceCatalog() {
-  console.log('Seeding service categories and services...')
-  for (const [i, cat] of SERVICE_CATEGORIES.entries()) {
+  console.log('Seeding service catalog (PRD 10 service groups)...')
+  const { categorySlugs, serviceSlugs } = collectSlugs()
+
+  // Retire any catalog entries from an earlier seed that aren't in the new set,
+  // so the storefront only shows the current 10 groups.
+  await prisma.service.updateMany({
+    where: { slug: { notIn: serviceSlugs } },
+    data: { isActive: false },
+  })
+  await prisma.serviceCategory.updateMany({
+    where: { slug: { notIn: categorySlugs } },
+    data: { isActive: false },
+  })
+
+  for (const [i, cat] of CATALOG.entries()) {
     const category = await prisma.serviceCategory.upsert({
       where: { slug: cat.slug },
-      update: {},
-      create: {
-        name: cat.name,
-        slug: cat.slug,
-        description: cat.description,
-        sortOrder: i,
-      },
+      update: { name: cat.name, description: cat.description, sortOrder: i, isActive: true },
+      create: { name: cat.name, slug: cat.slug, description: cat.description, sortOrder: i },
     })
 
     for (const [j, svc] of cat.services.entries()) {
-      await prisma.service.upsert({
+      const service = await prisma.service.upsert({
         where: { slug: svc.slug },
-        update: {},
+        update: {
+          categoryId: category.id,
+          name: svc.name,
+          description: svc.description,
+          icon: svc.icon,
+          sortOrder: j,
+          isActive: true,
+        },
         create: {
           categoryId: category.id,
           name: svc.name,
           slug: svc.slug,
+          description: svc.description,
           icon: svc.icon,
           sortOrder: j,
         },
       })
+
+      // Service-scoped questionnaire template carrying this group's questions.
+      const templateSlug = `${svc.slug}-v1`
+      const template = await prisma.questionnaireTemplate.upsert({
+        where: { slug: templateSlug },
+        update: { name: `${svc.name} — Requirements`, serviceId: service.id, isActive: true, isDefault: false },
+        create: {
+          name: `${svc.name} — Requirements`,
+          slug: templateSlug,
+          description: `Discovery questions for ${svc.name}`,
+          serviceId: service.id,
+          isDefault: false,
+          isActive: true,
+          version: 1,
+          createdById: 'seed',
+        },
+      })
+      await seedQuestionsIfEmpty(template.id, svc.questions)
     }
   }
-  console.log('✓ Service catalog seeded')
+
+  console.log('✓ Service catalog + per-service questionnaires seeded')
 }
 
-async function seedDefaultQuestionnaire() {
-  console.log('Seeding default questionnaire template...')
+async function seedSharedQuestionnaire() {
+  console.log('Seeding shared "Project basics" questionnaire...')
 
-  const itService = await prisma.service.findUnique({
-    where: { slug: 'custom-web-app' },
+  // Retire the previous default template so only one isDefault template exists.
+  await prisma.questionnaireTemplate.updateMany({
+    where: { isDefault: true, slug: { not: SHARED_TEMPLATE_SLUG } },
+    data: { isDefault: false, isActive: false },
   })
 
   const template = await prisma.questionnaireTemplate.upsert({
-    where: { slug: 'it-systems-general-v1' },
-    update: {},
+    where: { slug: SHARED_TEMPLATE_SLUG },
+    update: { name: 'Project basics', isDefault: true, isActive: true, serviceId: null },
     create: {
-      name: 'IT Systems & Application Development — General',
-      slug: 'it-systems-general-v1',
-      description: 'Standard discovery questionnaire for IT and application projects',
-      serviceId: itService?.id ?? null,
+      name: 'Project basics',
+      slug: SHARED_TEMPLATE_SLUG,
+      description: 'Budget, timeline, and final notes asked of every client',
+      serviceId: null,
       isDefault: true,
       isActive: true,
       version: 1,
       createdById: 'seed',
     },
   })
+  await seedQuestionsIfEmpty(template.id, SHARED_QUESTIONS)
 
-  const questions = [
-    {
-      text: 'What problem are you trying to solve with this project?',
-      type: 'LONG_TEXT' as const,
-      section: 'Project Goals',
-      sortOrder: 0,
-      isRequired: true,
-      aiContextHint: 'Core problem statement — use to frame executive summary',
-    },
-    {
-      text: 'Who are the primary users of this system?',
-      type: 'LONG_TEXT' as const,
-      section: 'Project Goals',
-      sortOrder: 1,
-      isRequired: true,
-    },
-    {
-      text: 'Do you have an existing system this needs to replace or integrate with?',
-      type: 'MULTIPLE_CHOICE' as const,
-      section: 'Technical Context',
-      sortOrder: 2,
-      isRequired: true,
-      options: ['Yes, replace existing', 'Yes, integrate with existing', 'No, greenfield'],
-    },
-    {
-      text: 'Describe the existing system and integration requirements',
-      type: 'LONG_TEXT' as const,
-      section: 'Technical Context',
-      sortOrder: 3,
-      isRequired: false,
-      conditionalLogic: {
-        logic: 'ANY',
-        rules: [
-          { questionIndex: 2, operator: 'equals', value: 'Yes, replace existing' },
-          { questionIndex: 2, operator: 'equals', value: 'Yes, integrate with existing' },
-        ],
-      },
-    },
-    {
-      text: 'What is your estimated budget range for this project?',
-      type: 'BUDGET_SLIDER' as const,
-      section: 'Budget & Timeline',
-      sortOrder: 4,
-      isRequired: true,
-      budgetMin: 10000,
-      budgetMax: 500000,
-      budgetStep: 5000,
-      budgetCurrency: 'USD',
-    },
-    {
-      text: 'What is your target timeline for initial delivery?',
-      type: 'TIMELINE_SELECTOR' as const,
-      section: 'Budget & Timeline',
-      sortOrder: 5,
-      isRequired: true,
-      timelineOptions: ['< 1 month', '1-3 months', '3-6 months', '6-12 months', '12+ months'],
-    },
-    {
-      text: 'How many users will use this system?',
-      type: 'TEAM_SIZE' as const,
-      section: 'Scale & Requirements',
-      sortOrder: 6,
-      isRequired: true,
-    },
-    {
-      text: 'Which of the following features are required? (select all that apply)',
-      type: 'CHECKBOX' as const,
-      section: 'Scale & Requirements',
-      sortOrder: 7,
-      isRequired: true,
-      options: [
-        'User authentication & roles',
-        'File upload & storage',
-        'Real-time notifications',
-        'API / third-party integrations',
-        'Reporting & analytics dashboard',
-        'Mobile app (iOS/Android)',
-        'Offline functionality',
-        'Multi-language support',
-      ],
-    },
-  ]
-
-  for (const q of questions) {
-    const { conditionalLogic, options, timelineOptions, ...rest } = q as typeof q & {
-      conditionalLogic?: object
-      options?: string[]
-      timelineOptions?: string[]
-    }
-    await prisma.question.upsert({
-      where: {
-        // Use templateId + sortOrder as a stable identifier during seeding
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        id: `seed-${template.id}-${rest.sortOrder}` as any,
-      },
-      update: {},
-      create: {
-        id: `seed-${template.id}-${rest.sortOrder}`,
-        templateId: template.id,
-        ...rest,
-        conditionalLogic: conditionalLogic ?? undefined,
-        options: options ?? undefined,
-        timelineOptions: timelineOptions ?? undefined,
-      },
-    })
-  }
-
-  console.log('✓ Default questionnaire template seeded')
+  console.log('✓ Shared questionnaire seeded')
 }
 
 async function seedAdminUser() {
@@ -321,7 +417,7 @@ async function seedAdminUser() {
 async function main() {
   console.log('Starting seed...')
   await seedServiceCatalog()
-  await seedDefaultQuestionnaire()
+  await seedSharedQuestionnaire()
   await seedAdminUser()
   console.log('Seed complete ✓')
 }

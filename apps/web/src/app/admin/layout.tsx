@@ -1,5 +1,6 @@
 import { AdminGuard } from '@/components/layout/admin-guard'
 import { AdminSidebar } from '@/components/layout/admin-sidebar'
+import { AdminUserMenu } from '@/components/layout/admin-user-menu'
 
 // Auth state is per-request — do not pre-render.
 export const dynamic = 'force-dynamic'
@@ -19,6 +20,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <span className="rounded-md bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">
                 AiTek Admin
               </span>
+              <AdminUserMenu />
             </div>
           </header>
           <main className="flex-1 overflow-y-auto bg-slate-50/50 p-6">{children}</main>
