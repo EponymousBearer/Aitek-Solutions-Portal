@@ -26,6 +26,10 @@ export default function ReviewPage() {
     router.push(`${routeForPhase(phase)}?return=review`)
   }
 
+  const handleEditCustomRequest = () => {
+    router.push('/onboarding/custom-request?return=review')
+  }
+
   const handleFinalize = async () => {
     setSubmitting(true)
     setError(null)
@@ -71,7 +75,7 @@ export default function ReviewPage() {
         </div>
       </div>
 
-      <OnboardingSummary onEdit={handleEdit} />
+      <OnboardingSummary onEdit={handleEdit} onEditCustomRequest={handleEditCustomRequest} />
 
       {error && (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">

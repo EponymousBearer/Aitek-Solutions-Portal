@@ -99,18 +99,22 @@ export async function advancePhase(
     select: { onboardingPhase: true, kycStatus: true },
   })
 
-  const [servicesCount, completedResponse] = await Promise.all([
+  const [servicesCount, completedResponse, customRequest] = await Promise.all([
     prisma.companySelectedService.count({ where: { companyId } }),
     prisma.questionnaireResponse.findFirst({
       where: { status: OnboardingStatus.COMPLETED, session: { companyId } },
       select: { id: true },
     }),
+    prisma.customRequest.findFirst({ where: { companyId }, select: { id: true } }),
   ])
 
+  // A submitted "Something else" custom request stands in for both the service
+  // selection and the questionnaire — that path skips straight to REVIEW.
+  const hasCustomRequest = customRequest !== null
   const kycDone =
     company.kycStatus === KYCStatus.UNDER_REVIEW || company.kycStatus === KYCStatus.APPROVED
-  const servicesDone = servicesCount > 0
-  const questionnaireDone = completedResponse !== null
+  const servicesDone = servicesCount > 0 || hasCustomRequest
+  const questionnaireDone = completedResponse !== null || hasCustomRequest
 
   let idx = phaseIndex(completedPhase) + 1
   while (idx < REVIEW_INDEX) {

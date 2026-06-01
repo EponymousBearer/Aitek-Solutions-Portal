@@ -142,6 +142,16 @@ export enum NotificationType {
   INVOICE_CREATED = 'INVOICE_CREATED',
   ONBOARDING_COMPLETED = 'ONBOARDING_COMPLETED',
   TEAM_MEMBER_INVITED = 'TEAM_MEMBER_INVITED',
+  CUSTOM_REQUEST_RECEIVED = 'CUSTOM_REQUEST_RECEIVED',
+}
+
+// Lifecycle of a "Something else" custom project request. Stored as a string on
+// the CustomRequest model (no DB enum), so this is the canonical set of values.
+export enum CustomRequestStatus {
+  PENDING_REVIEW = 'PENDING_REVIEW',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  CONVERTED = 'CONVERTED',
 }
 
 export enum AIOutputType {

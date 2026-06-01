@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 
 import { OnboardingPhase } from '@aitek/types'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Loader2, Sparkles } from 'lucide-react'
 
 import { BotBubble } from '@/components/onboarding/bot-bubble'
 import { ChatShell } from '@/components/onboarding/chat-shell'
@@ -37,20 +37,20 @@ export default function ServicesPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const { ready, reviewMode } = useOnboardingPhaseGuard(OnboardingPhase.SERVICES)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [openCategories, setOpenCategories] = useState<Set<string>>(new Set())
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [showCatalog, setShowCatalog] = useState(false)
 
+  const reviewSuffix = reviewMode ? '?return=review' : ''
+
   const { data: catalog, isLoading } = useQuery<CatalogCategory[]>({
     queryKey: ['service-catalog'],
-    queryFn: async () =>
-      (await api.get<{ data: CatalogCategory[] }>('/services')).data.data,
+    queryFn: async () => (await api.get<{ data: CatalogCategory[] }>('/services')).data.data,
   })
 
-  // Pre-select the client's existing choice (so resuming / editing in review
-  // shows what they picked before).
+  // Pre-select the client's existing choices (resume / edit-in-review).
   const { data: mySelected } = useQuery<{ id: string }[]>({
     queryKey: ['my-services'],
     queryFn: async () =>
@@ -58,12 +58,12 @@ export default function ServicesPage() {
   })
 
   useEffect(() => {
-    if (!selectedId && mySelected && mySelected.length > 0) {
-      setSelectedId(mySelected[0]!.id)
+    if (selectedIds.size === 0 && mySelected && mySelected.length > 0) {
+      setSelectedIds(new Set(mySelected.map((s) => s.id)))
     }
-  }, [mySelected, selectedId])
+  }, [mySelected, selectedIds.size])
 
-  // Reveal the catalog after the bot "types" for a moment
+  // Reveal the catalog after the bot "types" for a moment.
   useEffect(() => {
     if (!isLoading) {
       const t = setTimeout(() => setShowCatalog(true), 600)
@@ -72,14 +72,12 @@ export default function ServicesPage() {
     return undefined
   }, [isLoading])
 
-  const selectedService = useMemo(() => {
-    if (!selectedId || !catalog) return null
-    for (const cat of catalog) {
-      const found = cat.services.find((s) => s.id === selectedId)
-      if (found) return found
-    }
-    return null
-  }, [selectedId, catalog])
+  const selectedServices = useMemo(() => {
+    if (!catalog) return []
+    return catalog
+      .flatMap((c) => c.services)
+      .filter((s) => selectedIds.has(s.id))
+  }, [selectedIds, catalog])
 
   const toggleCategory = (id: string) => {
     setOpenCategories((cur) => {
@@ -90,13 +88,22 @@ export default function ServicesPage() {
     })
   }
 
+  const toggleService = (id: string) => {
+    setSelectedIds((cur) => {
+      const next = new Set(cur)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   const handleContinue = async () => {
-    if (!selectedId) return
+    if (selectedIds.size === 0) return
     setSubmitting(true)
     setSubmitError(null)
     try {
       const res = await api.post<{ data: { phase: OnboardingPhase } }>('/onboarding/services', {
-        serviceIds: [selectedId],
+        serviceIds: Array.from(selectedIds),
       })
       await queryClient.invalidateQueries({ queryKey: ['onboarding-progress'] })
       await queryClient.invalidateQueries({ queryKey: ['my-services'] })
@@ -138,8 +145,9 @@ export default function ServicesPage() {
         Great &mdash; your identity is being verified. Let&apos;s talk about what we can do for you.
       </BotBubble>
       <BotBubble>
-        Which service is the best fit for what you need? Pick the one that matches your project
-        most closely &mdash; we&apos;ll dig into the specifics next.
+        Which services are the best fit? Pick <strong>everything that applies</strong> &mdash; we&apos;ll
+        ask tailored questions for each one next. Not sure, or need something bespoke? Choose
+        <em> Something else</em> at the bottom.
       </BotBubble>
 
       {!showCatalog && <TypingIndicator />}
@@ -169,7 +177,7 @@ export default function ServicesPage() {
                 {openCategories.has(cat.id) && (
                   <div className="flex flex-col gap-1 border-t p-3">
                     {cat.services.map((svc) => {
-                      const isSelected = selectedId === svc.id
+                      const isSelected = selectedIds.has(svc.id)
                       return (
                         <label
                           key={svc.id}
@@ -180,18 +188,15 @@ export default function ServicesPage() {
                           }`}
                         >
                           <input
-                            type="radio"
-                            name="service"
+                            type="checkbox"
                             className="mt-0.5 h-4 w-4 accent-primary"
                             checked={isSelected}
-                            onChange={() => setSelectedId(svc.id)}
+                            onChange={() => toggleService(svc.id)}
                           />
                           <div className="min-w-0">
                             <div className="font-medium text-foreground">{svc.name}</div>
                             {svc.description && (
-                              <div className="text-xs text-muted-foreground">
-                                {svc.description}
-                              </div>
+                              <div className="text-xs text-muted-foreground">{svc.description}</div>
                             )}
                           </div>
                         </label>
@@ -201,19 +206,34 @@ export default function ServicesPage() {
                 )}
               </div>
             ))}
+
+            {/* Something else / custom request */}
+            <button
+              type="button"
+              onClick={() => router.push(`/onboarding/custom-request${reviewSuffix}`)}
+              className="flex w-full items-center gap-3 rounded-lg border border-dashed border-primary/40 bg-primary/5 px-3 py-3 text-left transition-colors hover:bg-primary/10"
+            >
+              <Sparkles className="h-5 w-5 shrink-0 text-primary" />
+              <div>
+                <div className="text-sm font-medium text-foreground">Something else</div>
+                <div className="text-xs text-muted-foreground">
+                  None of these quite fit? Tell us what you&apos;re looking for in your own words.
+                </div>
+              </div>
+            </button>
           </div>
         </BotBubble>
       )}
 
-      {selectedService && <UserBubble>{selectedService.name}</UserBubble>}
-
-      {submitError && (
-        <BotBubble className="text-destructive">{submitError}</BotBubble>
+      {selectedServices.length > 0 && (
+        <UserBubble>{selectedServices.map((s) => s.name).join(', ')}</UserBubble>
       )}
+
+      {submitError && <BotBubble className="text-destructive">{submitError}</BotBubble>}
 
       {showCatalog && (
         <div className="flex justify-end pt-2">
-          <Button onClick={handleContinue} disabled={!selectedId || submitting}>
+          <Button onClick={handleContinue} disabled={selectedIds.size === 0 || submitting}>
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {submitting
               ? 'Saving…'

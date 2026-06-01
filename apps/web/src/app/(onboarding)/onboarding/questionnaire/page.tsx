@@ -18,8 +18,10 @@ import { useOnboardingPhaseGuard } from '@/hooks/useOnboardingProgress'
 import { api } from '@/lib/api'
 import { routeForPhase } from '@/lib/onboarding'
 
-interface TemplateQuestion {
+interface DynamicQuestion {
   id: string
+  templateId: string
+  group: string
   text: string
   helpText: string | null
   type: QuestionType
@@ -32,21 +34,6 @@ interface TemplateQuestion {
   budgetStep: number | null
   budgetCurrency: string | null
   timelineOptions: unknown
-}
-
-interface DefaultTemplate {
-  id: string
-  name: string
-  slug: string
-  description: string | null
-  version: number
-  questions: TemplateQuestion[]
-}
-
-interface ResponseRecord {
-  id: string
-  sessionId: string
-  templateId: string
 }
 
 const formatValue = (value: unknown): string => {
@@ -68,21 +55,21 @@ export default function QuestionnairePage() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const { ready, reviewMode } = useOnboardingPhaseGuard(OnboardingPhase.QUESTIONNAIRE)
-  const [responseId, setResponseId] = useState<string | null>(null)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [answers, setAnswers] = useState<Record<string, unknown>>({})
   const [submitting, setSubmitting] = useState(false)
   const [botReady, setBotReady] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  const { data: template, isLoading } = useQuery<DefaultTemplate>({
-    queryKey: ['questionnaire-default'],
+  // Questionnaire is assembled server-side from the client's selected services.
+  const { data, isLoading } = useQuery<{ questions: DynamicQuestion[] }>({
+    queryKey: ['questionnaire-dynamic'],
     queryFn: async () =>
-      (await api.get<{ data: DefaultTemplate }>('/questionnaire/templates/default')).data.data,
+      (await api.get<{ data: { questions: DynamicQuestion[] } }>('/onboarding/questionnaire')).data
+        .data,
   })
 
-  // When editing from the review step, pre-load existing answers so the client
-  // re-walks the questions with their previous responses pre-filled.
+  // When editing from review, pre-load existing answers (across all responses).
   const { data: existingSession } = useQuery<ExistingSession | null>({
     queryKey: ['onboarding-session'],
     queryFn: async () =>
@@ -91,8 +78,8 @@ export default function QuestionnairePage() {
   })
 
   useEffect(() => {
-    const prior = existingSession?.responses?.[0]?.answers
-    if (reviewMode && prior && prior.length > 0) {
+    const prior = existingSession?.responses?.flatMap((r) => r.answers) ?? []
+    if (reviewMode && prior.length > 0) {
       setAnswers((cur) => {
         const map: Record<string, unknown> = {}
         for (const a of prior) map[a.questionId] = a.jsonValue
@@ -101,37 +88,32 @@ export default function QuestionnairePage() {
     }
   }, [reviewMode, existingSession])
 
-  // Bootstrap a response row once the template loads.
+  // Slight delay before the first bubble for a more natural feel.
   useEffect(() => {
-    if (!template || responseId) return
-    void api
-      .post<{ data: ResponseRecord }>('/onboarding/responses', { templateId: template.id })
-      .then((r) => setResponseId(r.data.data.id))
-      .catch((err) => {
-        console.error(err)
-        setSubmitError('Failed to start questionnaire. Try refreshing the page.')
-      })
-  }, [template, responseId])
-
-  // Slight delay before showing the first bubble for a more natural feel.
-  useEffect(() => {
-    if (template && !isLoading) {
+    if (data && !isLoading) {
       const t = setTimeout(() => setBotReady(true), 500)
       return () => clearTimeout(t)
     }
     return undefined
-  }, [template, isLoading])
+  }, [data, isLoading])
 
-  const questions = useMemo(() => template?.questions ?? [], [template])
+  const questions = useMemo(() => data?.questions ?? [], [data])
   const currentQuestion = useMemo(() => questions[currentIndex], [questions, currentIndex])
   const allDone = botReady && currentIndex >= questions.length && questions.length > 0
 
-  const handleAnswer = async (value: unknown) => {
-    if (!currentQuestion || !responseId) return
-    setAnswers((cur) => ({ ...cur, [currentQuestion.id]: value }))
+  // Show a group header bubble whenever the service group changes.
+  const groupHeaderFor = (index: number): string | null => {
+    const q = questions[index]
+    if (!q) return null
+    if (index === 0) return q.group
+    return questions[index - 1]?.group === q.group ? null : q.group
+  }
 
+  const handleAnswer = async (value: unknown) => {
+    if (!currentQuestion) return
+    setAnswers((cur) => ({ ...cur, [currentQuestion.id]: value }))
     try {
-      await api.post(`/onboarding/responses/${responseId}/answers`, {
+      await api.post('/onboarding/questionnaire/answers', {
         answers: [{ questionId: currentQuestion.id, value }],
       })
       setCurrentIndex((i) => i + 1)
@@ -142,12 +124,11 @@ export default function QuestionnairePage() {
   }
 
   const handleSubmitAll = async () => {
-    if (!responseId) return
     setSubmitting(true)
     setSubmitError(null)
     try {
       const res = await api.post<{ data: { phase: OnboardingPhase } }>(
-        `/onboarding/responses/${responseId}/submit`,
+        '/onboarding/questionnaire/submit',
       )
       await queryClient.invalidateQueries({ queryKey: ['current-user'] })
       await queryClient.invalidateQueries({ queryKey: ['onboarding-progress'] })
@@ -155,7 +136,6 @@ export default function QuestionnairePage() {
         router.push('/onboarding/review')
         return
       }
-      // After the questionnaire the pointer advances to REVIEW.
       router.push(routeForPhase(res.data.data.phase))
     } catch (err) {
       console.error(err)
@@ -181,15 +161,34 @@ export default function QuestionnairePage() {
         </div>
       )}
       <BotBubble>
-        Last step. I&apos;ll ask a few questions about your project so we can scope it accurately. There
-        are no wrong answers &mdash; short replies are fine.
+        Last step. I&apos;ll ask a few questions tailored to the services you picked so we can scope
+        things accurately. Short replies are fine.
       </BotBubble>
 
       {!botReady && <TypingIndicator />}
 
-      {/* Render answered questions as completed Q+A pairs */}
-      {questions.slice(0, currentIndex).map((q) => (
+      {botReady && questions.length === 0 && (
+        <BotBubble>
+          No questions to ask &mdash; head back to{' '}
+          <button
+            type="button"
+            className="underline"
+            onClick={() => router.push('/onboarding/services')}
+          >
+            services
+          </button>{' '}
+          to pick what you need.
+        </BotBubble>
+      )}
+
+      {/* Answered questions as completed Q+A pairs */}
+      {questions.slice(0, currentIndex).map((q, i) => (
         <div key={q.id} className="space-y-3">
+          {groupHeaderFor(i) && (
+            <div className="pt-1 text-xs font-semibold uppercase tracking-wide text-primary">
+              {groupHeaderFor(i)}
+            </div>
+          )}
           <BotBubble>{q.text}</BotBubble>
           <UserBubble>{formatValue(answers[q.id])}</UserBubble>
         </div>
@@ -198,6 +197,11 @@ export default function QuestionnairePage() {
       {/* Current question */}
       {botReady && currentQuestion && (
         <>
+          {groupHeaderFor(currentIndex) && (
+            <div className="pt-1 text-xs font-semibold uppercase tracking-wide text-primary">
+              {groupHeaderFor(currentIndex)}
+            </div>
+          )}
           <BotBubble>
             <div className="space-y-1">
               <div>{currentQuestion.text}</div>
@@ -214,11 +218,20 @@ export default function QuestionnairePage() {
               disabled={submitting}
               initialValue={answers[currentQuestion.id]}
             />
+            {!currentQuestion.isRequired && (
+              <button
+                type="button"
+                onClick={() => handleAnswer(answers[currentQuestion.id] ?? '')}
+                className="mt-2 text-xs text-muted-foreground underline"
+              >
+                Skip this question
+              </button>
+            )}
           </div>
         </>
       )}
 
-      {/* All questions answered — confirm */}
+      {/* All answered — confirm */}
       {allDone && (
         <>
           <BotBubble>
