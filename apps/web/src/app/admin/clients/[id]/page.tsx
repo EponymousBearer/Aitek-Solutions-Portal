@@ -12,6 +12,7 @@ import { ArrowLeft, CheckCircle2, Loader2, RotateCcw } from 'lucide-react'
 import {
   OnboardingSummaryView,
   type SummaryAnswer,
+  type SummaryCustomRequest,
   type SummaryDoc,
 } from '@/components/onboarding/onboarding-summary'
 import { Button } from '@/components/ui/button'
@@ -55,6 +56,15 @@ interface CompanyDetail {
       id: string
       answers: { questionId: string; jsonValue: unknown; question: { id: string; text: string } }[]
     }[]
+  }[]
+  customRequests: {
+    id: string
+    description: string
+    goals: string | null
+    budget: string | null
+    timeline: string | null
+    fileKeys: string[]
+    status: string
   }[]
   progress: { phase: OnboardingPhase; percent: number; phases: PhaseStatus[] }
 }
@@ -150,9 +160,19 @@ export default function AdminClientDetailPage() {
   const contact = data.memberships.find((m) => m.role === 'CLIENT_ADMIN')?.user ?? data.memberships[0]?.user
   const documents: SummaryDoc[] = data.kycSubmissions[0]?.documents ?? []
   const services = data.selectedServices.map((s) => ({ id: s.service.id, name: s.service.name }))
-  const answers: SummaryAnswer[] = (data.onboardingSessions[0]?.responses?.[0]?.answers ?? []).map(
-    (a) => ({ questionId: a.questionId, questionText: a.question.text, value: a.jsonValue }),
-  )
+  const answers: SummaryAnswer[] = (data.onboardingSessions[0]?.responses ?? [])
+    .flatMap((r) => r.answers)
+    .map((a) => ({ questionId: a.questionId, questionText: a.question.text, value: a.jsonValue }))
+  const customRequest: SummaryCustomRequest | null = data.customRequests[0]
+    ? {
+        description: data.customRequests[0].description,
+        goals: data.customRequests[0].goals,
+        budget: data.customRequests[0].budget,
+        timeline: data.customRequests[0].timeline,
+        fileKeys: data.customRequests[0].fileKeys,
+        status: data.customRequests[0].status,
+      }
+    : null
   const isSubmitted = data.onboardingPhase === OnboardingPhase.SUBMITTED
 
   return (
@@ -279,6 +299,7 @@ export default function AdminClientDetailPage() {
         documents={documents}
         services={services}
         answers={answers}
+        customRequest={customRequest}
       />
     </div>
   )

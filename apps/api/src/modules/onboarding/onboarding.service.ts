@@ -7,7 +7,6 @@ import {
   ForbiddenException,
   Injectable,
   Logger,
-  NotFoundException,
 } from '@nestjs/common'
 
 import { PrismaService } from '../../prisma/prisma.service'
@@ -164,77 +163,130 @@ export class OnboardingService {
     return rows.map((r) => r.service)
   }
 
-  async createResponse(templateId: string, user: AuthUser) {
+  // Build the questionnaire dynamically from the client's selected services:
+  // each selected service contributes its own question set, and a shared
+  // "Project basics" template (budget / timeline / notes) is always appended.
+  async getQuestionnaire(user: AuthUser) {
+    if (!user.companyId) throw new ForbiddenException('User has no company')
+
+    const selected = await this.prisma.companySelectedService.findMany({
+      where: { companyId: user.companyId },
+      orderBy: { createdAt: 'asc' },
+      select: { serviceId: true },
+    })
+    const serviceIds = selected.map((s) => s.serviceId)
+
+    const or: Array<{ serviceId?: { in: string[] }; isDefault?: boolean }> = [{ isDefault: true }]
+    if (serviceIds.length > 0) or.unshift({ serviceId: { in: serviceIds } })
+
+    const templates = await this.prisma.questionnaireTemplate.findMany({
+      where: { isActive: true, OR: or },
+      include: {
+        questions: { orderBy: { sortOrder: 'asc' } },
+        service: { select: { id: true, name: true } },
+      },
+    })
+
+    // Service templates follow the client's selection order; the shared default
+    // template always sorts last.
+    const orderOf = (t: (typeof templates)[number]): number => {
+      if (t.isDefault) return Number.MAX_SAFE_INTEGER
+      const idx = serviceIds.indexOf(t.serviceId ?? '')
+      return idx === -1 ? Number.MAX_SAFE_INTEGER - 1 : idx
+    }
+    templates.sort((a, b) => orderOf(a) - orderOf(b))
+
+    const questions = templates.flatMap((t) =>
+      t.questions.map((q) => ({
+        id: q.id,
+        templateId: t.id,
+        group: t.service?.name ?? 'Project basics',
+        text: q.text,
+        helpText: q.helpText,
+        type: q.type,
+        isRequired: q.isRequired,
+        section: q.section,
+        sortOrder: q.sortOrder,
+        options: q.options,
+        budgetMin: q.budgetMin,
+        budgetMax: q.budgetMax,
+        budgetStep: q.budgetStep,
+        budgetCurrency: q.budgetCurrency,
+        timelineOptions: q.timelineOptions,
+      })),
+    )
+
+    return { questions }
+  }
+
+  // Question-centric save: each answer is routed to the response row for its own
+  // template, creating that response on first write. The client never juggles
+  // response ids — it just posts { questionId, value } pairs.
+  async saveQuestionnaireAnswers(answers: AnswerUpsertInput[], user: AuthUser) {
+    if (!user.companyId) throw new ForbiddenException('User has no company')
     const company = await this.loadCompany(user)
     assertPhaseEditable(company, OnboardingPhase.QUESTIONNAIRE)
     const session = await this.ensureSession(user)
+    if (answers.length === 0) return { saved: 0 }
 
-    const template = await this.prisma.questionnaireTemplate.findUnique({
-      where: { id: templateId },
+    const questions = await this.prisma.question.findMany({
+      where: { id: { in: answers.map((a) => a.questionId) } },
+      select: { id: true, templateId: true },
     })
-    if (!template) throw new NotFoundException('Questionnaire template not found')
+    const templateOf = new Map(questions.map((q) => [q.id, q.templateId]))
 
-    return this.prisma.questionnaireResponse.upsert({
-      where: { sessionId_templateId: { sessionId: session.id, templateId } },
-      update: {},
-      create: {
-        sessionId: session.id,
-        templateId,
-        templateVersion: template.version,
-        status: OnboardingStatus.IN_PROGRESS,
-      },
-    })
-  }
-
-  async upsertAnswers(responseId: string, answers: AnswerUpsertInput[], user: AuthUser) {
-    const response = await this.prisma.questionnaireResponse.findUnique({
-      where: { id: responseId },
-      include: { session: true },
-    })
-    if (!response) throw new NotFoundException('Response not found')
-    if (response.session.userId !== user.id) {
-      throw new ForbiddenException('You can only modify your own responses')
+    // Ensure a response exists per template these answers belong to.
+    const responseByTemplate = new Map<string, string>()
+    for (const templateId of new Set(questions.map((q) => q.templateId))) {
+      const template = await this.prisma.questionnaireTemplate.findUniqueOrThrow({
+        where: { id: templateId },
+        select: { version: true },
+      })
+      const response = await this.prisma.questionnaireResponse.upsert({
+        where: { sessionId_templateId: { sessionId: session.id, templateId } },
+        update: {},
+        create: {
+          sessionId: session.id,
+          templateId,
+          templateVersion: template.version,
+          status: OnboardingStatus.IN_PROGRESS,
+        },
+        select: { id: true },
+      })
+      responseByTemplate.set(templateId, response.id)
     }
-    const company = await this.loadCompany(user)
-    assertPhaseEditable(company, OnboardingPhase.QUESTIONNAIRE)
 
     await this.prisma.$transaction(
-      answers.map((a) =>
-        this.prisma.answer.upsert({
-          where: { responseId_questionId: { responseId, questionId: a.questionId } },
-          update: { jsonValue: a.value as object },
-          create: {
-            responseId,
-            questionId: a.questionId,
-            jsonValue: a.value as object,
-          },
+      answers
+        .filter((a) => templateOf.has(a.questionId))
+        .map((a) => {
+          const responseId = responseByTemplate.get(templateOf.get(a.questionId)!)!
+          return this.prisma.answer.upsert({
+            where: { responseId_questionId: { responseId, questionId: a.questionId } },
+            update: { jsonValue: a.value as object },
+            create: { responseId, questionId: a.questionId, jsonValue: a.value as object },
+          })
         }),
-      ),
     )
 
     return { saved: answers.length }
   }
 
-  async submitResponse(responseId: string, user: AuthUser) {
-    const response = await this.prisma.questionnaireResponse.findUnique({
-      where: { id: responseId },
-      include: { session: true },
-    })
-    if (!response) throw new NotFoundException('Response not found')
-    if (response.session.userId !== user.id) {
-      throw new ForbiddenException('You can only submit your own responses')
-    }
+  // Finish the questionnaire: mark every in-progress response for this session
+  // complete and advance the pointer to REVIEW. The onboarding session itself is
+  // completed later, at finalize().
+  async submitQuestionnaire(user: AuthUser) {
+    if (!user.companyId) throw new ForbiddenException('User has no company')
     const company = await this.loadCompany(user)
     assertPhaseEditable(company, OnboardingPhase.QUESTIONNAIRE)
+    const session = await this.ensureSession(user)
 
-    // Complete the response only. The onboarding session is NOT completed here —
-    // that now happens at finalize(), after the client confirms the REVIEW step.
-    await this.prisma.questionnaireResponse.update({
-      where: { id: responseId },
+    await this.prisma.questionnaireResponse.updateMany({
+      where: { sessionId: session.id, status: OnboardingStatus.IN_PROGRESS },
       data: { status: OnboardingStatus.COMPLETED, completedAt: new Date() },
     })
 
-    const phase = await advancePhase(this.prisma, user.companyId!, OnboardingPhase.QUESTIONNAIRE)
+    const phase = await advancePhase(this.prisma, user.companyId, OnboardingPhase.QUESTIONNAIRE)
     return { completed: true, phase }
   }
 }

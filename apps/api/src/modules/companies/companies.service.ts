@@ -80,6 +80,10 @@ export class CompaniesService {
         selectedServices: {
           include: { service: { select: { id: true, name: true, slug: true } } },
         },
+        customRequests: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
         kycSubmissions: {
           orderBy: { createdAt: 'desc' },
           take: 1,

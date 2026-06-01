@@ -1,5 +1,5 @@
 import type { AuthUser } from '@aitek/types'
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common'
 
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
@@ -11,11 +11,7 @@ interface SetServicesBody {
   serviceIds: string[]
 }
 
-interface CreateResponseBody {
-  templateId: string
-}
-
-interface UpsertAnswersBody {
+interface SaveAnswersBody {
   answers: Array<{ questionId: string; value: unknown }>
 }
 
@@ -56,22 +52,19 @@ export class OnboardingController {
     return this.onboarding.setSelectedServices(body.serviceIds ?? [], user)
   }
 
-  @Post('responses')
-  async createResponse(@Body() body: CreateResponseBody, @CurrentUser() user: AuthUser) {
-    return this.onboarding.createResponse(body.templateId, user)
+  // Dynamic questionnaire assembled from the client's selected services.
+  @Get('questionnaire')
+  async getQuestionnaire(@CurrentUser() user: AuthUser) {
+    return this.onboarding.getQuestionnaire(user)
   }
 
-  @Post('responses/:id/answers')
-  async upsertAnswers(
-    @Param('id') id: string,
-    @Body() body: UpsertAnswersBody,
-    @CurrentUser() user: AuthUser,
-  ) {
-    return this.onboarding.upsertAnswers(id, body.answers ?? [], user)
+  @Post('questionnaire/answers')
+  async saveAnswers(@Body() body: SaveAnswersBody, @CurrentUser() user: AuthUser) {
+    return this.onboarding.saveQuestionnaireAnswers(body.answers ?? [], user)
   }
 
-  @Post('responses/:id/submit')
-  async submitResponse(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.onboarding.submitResponse(id, user)
+  @Post('questionnaire/submit')
+  async submitQuestionnaire(@CurrentUser() user: AuthUser) {
+    return this.onboarding.submitQuestionnaire(user)
   }
 }
