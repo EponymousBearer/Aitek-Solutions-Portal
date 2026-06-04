@@ -1,5 +1,12 @@
 
-import { CompanyMembershipRole, KYCStatus, OnboardingPhase, ProjectStatus, UserRole } from '@aitek/types'
+import {
+  CompanyMembershipRole,
+  KYCStatus,
+  OnboardingPhase,
+  ProjectMembershipRole,
+  ProjectStatus,
+  UserRole,
+} from '@aitek/types'
 import type { AuthUser, CreateCompanyInput, UpdateCompanyInput } from '@aitek/types'
 import {
   BadRequestException,
@@ -232,7 +239,7 @@ export class CompaniesService {
         select: { id: true },
       })
       if (!existingProject) {
-        await tx.project.create({
+        const project = await tx.project.create({
           data: {
             companyId,
             name: company.name,
@@ -242,6 +249,23 @@ export class CompaniesService {
             createdById: user.id,
           },
         })
+        // Assign the onboarding client (company owner/admin) to their own
+        // project as a stakeholder, so it shows up in their portal by default.
+        const owners = await tx.companyMembership.findMany({
+          where: { companyId, isActive: true, role: CompanyMembershipRole.CLIENT_ADMIN },
+          select: { userId: true },
+        })
+        if (owners.length > 0) {
+          await tx.projectMembership.createMany({
+            data: owners.map((o) => ({
+              projectId: project.id,
+              userId: o.userId,
+              role: ProjectMembershipRole.CLIENT_STAKEHOLDER,
+              addedById: user.id,
+            })),
+            skipDuplicates: true,
+          })
+        }
       }
     })
 

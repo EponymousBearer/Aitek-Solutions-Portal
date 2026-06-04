@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Loader2, Save } from 'lucide-react'
 
 import { ProjectOnboarding, type ProjectCompany } from '@/components/projects/project-onboarding'
+import { ProjectTeam, type CompanyMemberOption } from '@/components/projects/project-team'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api'
@@ -24,7 +25,11 @@ interface ProjectDetail {
   estimatedEndDate: string | null
   endDate: string | null
   createdAt: string
-  company: ProjectCompany & { id: string; name: string }
+  company: ProjectCompany & {
+    id: string
+    name: string
+    memberships?: CompanyMemberOption[]
+  }
 }
 
 function extractMessage(err: unknown, fallback: string): string {
@@ -195,6 +200,9 @@ export default function AdminProjectDetailPage() {
           </Button>
         </div>
       </div>
+
+      {/* Team: lead PM, developers, client stakeholders */}
+      <ProjectTeam projectId={projectId} companyMembers={data.company.memberships ?? []} />
 
       {/* Onboarding submission */}
       <div>

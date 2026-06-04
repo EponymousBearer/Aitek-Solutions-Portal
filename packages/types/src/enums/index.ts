@@ -17,6 +17,14 @@ export enum CompanyMembershipRole {
   CLIENT_ADMIN = 'CLIENT_ADMIN',
 }
 
+// Sub-role for AiTek internal team members (role === AITEK_TEAM_MEMBER).
+// Set when an admin invites the person; drives who can lead a project
+// (PROJECT_MANAGER) vs. be assigned to one as a developer (DEVELOPER).
+export enum AitekRole {
+  PROJECT_MANAGER = 'PROJECT_MANAGER',
+  DEVELOPER = 'DEVELOPER',
+}
+
 export enum KYCStatus {
   NOT_STARTED = 'NOT_STARTED',
   PENDING = 'PENDING',

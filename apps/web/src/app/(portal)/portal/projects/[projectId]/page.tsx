@@ -11,6 +11,13 @@ import { ProjectOnboarding, type ProjectCompany } from '@/components/projects/pr
 import { api } from '@/lib/api'
 import { PROJECT_STATUS_LABELS, projectProgress, projectStatusBadgeClass } from '@/lib/project'
 
+interface ProjectMember {
+  id: string
+  userId: string
+  role: 'AITEK_LEAD' | 'AITEK_MEMBER' | 'CLIENT_STAKEHOLDER'
+  user: { id: string; firstName: string; lastName: string; email: string }
+}
+
 interface ProjectDetail {
   id: string
   name: string
@@ -21,10 +28,20 @@ interface ProjectDetail {
   endDate: string | null
   createdAt: string
   company: ProjectCompany & { id: string; name: string }
+  memberships?: ProjectMember[]
 }
 
 function fmtDate(v: string | null): string {
   return v ? new Date(v).toLocaleDateString() : '—'
+}
+
+function memberName(u: { firstName: string; lastName: string; email: string }): string {
+  return `${u.firstName} ${u.lastName}`.trim() || u.email
+}
+
+const AITEK_ROLE_LABEL: Record<string, string> = {
+  AITEK_LEAD: 'Project Manager',
+  AITEK_MEMBER: 'Developer',
 }
 
 export default function PortalProjectDetailPage() {
@@ -59,6 +76,9 @@ export default function PortalProjectDetailPage() {
   }
 
   const progress = projectProgress(data.status)
+  const aitekTeam = (data.memberships ?? []).filter(
+    (m) => m.role === 'AITEK_LEAD' || m.role === 'AITEK_MEMBER',
+  )
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
@@ -126,6 +146,23 @@ export default function PortalProjectDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Assigned AiTek team */}
+      {aitekTeam.length > 0 && (
+        <div className="space-y-3 rounded-xl border border-border bg-background p-5">
+          <h2 className="text-sm font-semibold text-foreground">Your AiTek team</h2>
+          <ul className="space-y-1.5">
+            {aitekTeam.map((m) => (
+              <li key={m.id} className="flex items-center justify-between text-sm">
+                <span className="text-foreground">{memberName(m.user)}</span>
+                <span className="text-xs text-muted-foreground">
+                  {AITEK_ROLE_LABEL[m.role] ?? 'Team'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Onboarding details */}
       <div>

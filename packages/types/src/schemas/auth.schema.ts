@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { CompanyMembershipRole, KYCStatus, OnboardingPhase, UserRole } from '../enums'
+import { AitekRole, CompanyMembershipRole, KYCStatus, OnboardingPhase, UserRole } from '../enums'
 
 export const inviteSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -31,6 +31,8 @@ export const authUserSchema = z.object({
   firstName: z.string(),
   lastName: z.string(),
   role: z.nativeEnum(UserRole),
+  // Set only for AITEK_TEAM_MEMBER users (PROJECT_MANAGER | DEVELOPER).
+  aitekRole: z.nativeEnum(AitekRole).optional(),
   companyId: z.string().optional(),
   companyMembershipRole: z.nativeEnum(CompanyMembershipRole).optional(),
   portalAccessGranted: z.boolean().optional(),

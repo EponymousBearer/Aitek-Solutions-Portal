@@ -17,6 +17,7 @@ import { OnboardingModule } from './modules/onboarding/onboarding.module'
 import { ProjectsModule } from './modules/projects/projects.module'
 import { QuestionnaireModule } from './modules/questionnaire/questionnaire.module'
 import { ServicesModule } from './modules/services/services.module'
+import { TeamModule } from './modules/team/team.module'
 import { PrismaModule } from './prisma/prisma.module'
 
 @Module({
@@ -53,6 +54,7 @@ import { PrismaModule } from './prisma/prisma.module'
     KycModule,
     CustomRequestsModule,
     ProjectsModule,
+    TeamModule,
   ],
   providers: [
     // Global guards. ClerkAuthGuard needs DI (Prisma) so it can't be

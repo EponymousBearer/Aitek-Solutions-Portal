@@ -1,5 +1,5 @@
 import type { AuthUser } from '@aitek/types'
-import { UserRole, CompanyMembershipRole } from '@aitek/types'
+import { UserRole, CompanyMembershipRole, AitekRole } from '@aitek/types'
 import { verifyToken } from '@clerk/backend'
 import {
   CanActivate,
@@ -63,6 +63,7 @@ export class ClerkAuthGuard implements CanActivate {
         firstName: true,
         lastName: true,
         role: true,
+        aitekRole: true,
         companyMemberships: {
           where: { isActive: true },
           take: 1,
@@ -80,6 +81,10 @@ export class ClerkAuthGuard implements CanActivate {
       firstName: dbUser?.firstName ?? (payload['firstName'] as string) ?? '',
       lastName: dbUser?.lastName ?? (payload['lastName'] as string) ?? '',
       role: (dbUser?.role as UserRole) ?? (payload['role'] as UserRole) ?? UserRole.CLIENT_USER,
+      aitekRole:
+        (dbUser?.aitekRole as AitekRole | null | undefined) ??
+        (payload['aitekRole'] as AitekRole) ??
+        undefined,
       companyId: membership?.companyId ?? (payload['companyId'] as string) ?? undefined,
       companyMembershipRole:
         (membership?.role as CompanyMembershipRole | undefined) ??
