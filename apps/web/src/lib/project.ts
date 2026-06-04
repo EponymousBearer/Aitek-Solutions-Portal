@@ -1,4 +1,29 @@
-import { ProjectStatus } from '@aitek/types'
+import { MilestoneStatus, ProjectStatus } from '@aitek/types'
+
+export const MILESTONE_STATUS_LABELS: Record<MilestoneStatus, string> = {
+  [MilestoneStatus.PENDING]: 'Pending',
+  [MilestoneStatus.IN_PROGRESS]: 'In progress',
+  [MilestoneStatus.AWAITING_APPROVAL]: 'Awaiting approval',
+  [MilestoneStatus.APPROVED]: 'Approved',
+  [MilestoneStatus.REJECTED]: 'Changes requested',
+  [MilestoneStatus.COMPLETED]: 'Completed',
+}
+
+export function milestoneStatusBadgeClass(status: MilestoneStatus): string {
+  switch (status) {
+    case MilestoneStatus.COMPLETED:
+    case MilestoneStatus.APPROVED:
+      return 'bg-green-100 text-green-700'
+    case MilestoneStatus.AWAITING_APPROVAL:
+      return 'bg-amber-100 text-amber-700'
+    case MilestoneStatus.REJECTED:
+      return 'bg-red-100 text-red-700'
+    case MilestoneStatus.IN_PROGRESS:
+      return 'bg-blue-100 text-blue-700'
+    default:
+      return 'bg-muted text-muted-foreground'
+  }
+}
 
 // The forward "ladder" of project phases used to derive a progress %.
 // ON_HOLD / CANCELLED sit outside the ladder.

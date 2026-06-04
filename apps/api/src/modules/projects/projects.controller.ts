@@ -42,6 +42,13 @@ interface AddMemberBody {
   role: ProjectMembershipRole
 }
 
+interface MilestoneBody {
+  name?: string
+  description?: string | null
+  dueDate?: string | null
+  sortOrder?: number
+}
+
 @Controller('projects')
 @UseGuards(ClerkAuthGuard)
 export class ProjectsController {
@@ -123,5 +130,78 @@ export class ProjectsController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.projects.removeMember(id, userId, user)
+  }
+
+  // ── Milestones ─────────────────────────────────────
+  // View: any viewer who can see the project (scoped in the service).
+  // Create/edit/delete/submit: AiTek team. Approve/reject: client or admin
+  // (the service blocks AiTek team members from approving).
+
+  @Get(':id/milestones')
+  async listMilestones(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.projects.listMilestones(id, user)
+  }
+
+  @Post(':id/milestones')
+  @Roles(UserRole.AITEK_ADMIN, UserRole.AITEK_TEAM_MEMBER)
+  async createMilestone(
+    @Param('id') id: string,
+    @Body() body: MilestoneBody,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.projects.createMilestone(id, body, user)
+  }
+
+  @Patch(':id/milestones/:milestoneId')
+  @Roles(UserRole.AITEK_ADMIN, UserRole.AITEK_TEAM_MEMBER)
+  async updateMilestone(
+    @Param('id') id: string,
+    @Param('milestoneId') milestoneId: string,
+    @Body() body: MilestoneBody,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.projects.updateMilestone(id, milestoneId, body, user)
+  }
+
+  @Delete(':id/milestones/:milestoneId')
+  @Roles(UserRole.AITEK_ADMIN, UserRole.AITEK_TEAM_MEMBER)
+  async deleteMilestone(
+    @Param('id') id: string,
+    @Param('milestoneId') milestoneId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.projects.deleteMilestone(id, milestoneId, user)
+  }
+
+  @Post(':id/milestones/:milestoneId/submit')
+  @Roles(UserRole.AITEK_ADMIN, UserRole.AITEK_TEAM_MEMBER)
+  async submitMilestone(
+    @Param('id') id: string,
+    @Param('milestoneId') milestoneId: string,
+    @Body() body: { completionNote?: string | null },
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.projects.submitMilestone(id, milestoneId, body ?? {}, user)
+  }
+
+  // No @Roles guard — the service permits clients + admin and blocks team members.
+  @Post(':id/milestones/:milestoneId/approve')
+  async approveMilestone(
+    @Param('id') id: string,
+    @Param('milestoneId') milestoneId: string,
+    @Body() body: { reviewComment?: string | null },
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.projects.approveMilestone(id, milestoneId, body ?? {}, user)
+  }
+
+  @Post(':id/milestones/:milestoneId/reject')
+  async rejectMilestone(
+    @Param('id') id: string,
+    @Param('milestoneId') milestoneId: string,
+    @Body() body: { reviewComment?: string | null },
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.projects.rejectMilestone(id, milestoneId, body ?? {}, user)
   }
 }

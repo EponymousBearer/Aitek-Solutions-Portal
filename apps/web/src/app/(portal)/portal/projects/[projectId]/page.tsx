@@ -7,6 +7,7 @@ import type { ProjectStatus } from '@aitek/types'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 
+import { MilestoneTracker } from '@/components/projects/milestone-tracker'
 import { ProjectOnboarding, type ProjectCompany } from '@/components/projects/project-onboarding'
 import { api } from '@/lib/api'
 import { PROJECT_STATUS_LABELS, projectProgress, projectStatusBadgeClass } from '@/lib/project'
@@ -163,6 +164,9 @@ export default function PortalProjectDetailPage() {
           </ul>
         </div>
       )}
+
+      {/* Milestones — client can approve / request changes */}
+      <MilestoneTracker projectId={projectId} />
 
       {/* Onboarding details */}
       <div>

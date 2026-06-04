@@ -8,6 +8,7 @@ import { ProjectStatus } from '@aitek/types'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Loader2, Save } from 'lucide-react'
 
+import { MilestoneTracker } from '@/components/projects/milestone-tracker'
 import { ProjectOnboarding, type ProjectCompany } from '@/components/projects/project-onboarding'
 import { ProjectTeam, type CompanyMemberOption } from '@/components/projects/project-team'
 import { Button } from '@/components/ui/button'
@@ -230,6 +231,9 @@ export function InternalProjectDetail({
 
       {/* Team — controls self-gate: the lead PM can manage, developers see read-only */}
       <ProjectTeam projectId={projectId} companyMembers={data.company.memberships ?? []} />
+
+      {/* Milestones — AiTek team can create/edit/submit */}
+      <MilestoneTracker projectId={projectId} />
 
       {/* Onboarding submission */}
       <div>

@@ -1,6 +1,7 @@
 import {
   AitekRole,
   CompanyMembershipRole,
+  MilestoneStatus,
   ProjectMembershipRole,
   ProjectStatus,
   UserRole,
@@ -412,5 +413,229 @@ export class ProjectsService {
     })
 
     return this.listMembers(projectId, actor)
+  }
+
+  // ── Milestones ───────────────────────────────────────────────
+
+  // The project must be visible to the user (reuses the same scope as getById);
+  // a user who can't see it gets a 404. Returns minimal project fields.
+  private async requireVisibleProject(projectId: string, user: AuthUser) {
+    const project = await this.prisma.project.findFirst({
+      where: { ...this.scopeWhere(user), id: projectId },
+      select: { id: true, companyId: true, leadUserId: true },
+    })
+    if (!project) throw new NotFoundException('Project not found')
+    return project
+  }
+
+  // Create / edit / submit milestones is gated by assertCanManageProject
+  // (admin or the project's lead PM) — developers are view-only.
+
+  // Approve / reject — the client side (or an admin acting for them). AiTek team
+  // members cannot approve their own work.
+  private assertCanApproveMilestones(user: AuthUser): void {
+    if (user.role === UserRole.AITEK_TEAM_MEMBER) {
+      throw new ForbiddenException('AiTek team members cannot approve milestones')
+    }
+  }
+
+  private async findMilestone(projectId: string, milestoneId: string) {
+    const milestone = await this.prisma.milestone.findFirst({
+      where: { id: milestoneId, projectId },
+    })
+    if (!milestone) throw new NotFoundException('Milestone not found')
+    return milestone
+  }
+
+  private readonly approvalInclude = {
+    approvals: {
+      orderBy: { requestedAt: 'desc' as const },
+      take: 5,
+      include: {
+        requestedBy: { select: { id: true, firstName: true, lastName: true, email: true } },
+      },
+    },
+  }
+
+  async listMilestones(projectId: string, user: AuthUser) {
+    await this.requireVisibleProject(projectId, user)
+    return this.prisma.milestone.findMany({
+      where: { projectId },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+      include: this.approvalInclude,
+    })
+  }
+
+  async createMilestone(
+    projectId: string,
+    input: { name?: string; description?: string | null; dueDate?: string | null; sortOrder?: number },
+    user: AuthUser,
+  ) {
+    await this.requireVisibleProject(projectId, user)
+    await this.assertCanManageProject(projectId, user)
+    if (!input.name?.trim()) throw new BadRequestException('Milestone name is required')
+
+    return this.prisma.milestone.create({
+      data: {
+        projectId,
+        name: input.name.trim(),
+        description: input.description?.trim() || null,
+        dueDate: this.toDate(input.dueDate) ?? null,
+        sortOrder: input.sortOrder ?? 0,
+        createdById: user.id,
+      },
+      include: this.approvalInclude,
+    })
+  }
+
+  async updateMilestone(
+    projectId: string,
+    milestoneId: string,
+    input: { name?: string; description?: string | null; dueDate?: string | null; sortOrder?: number },
+    user: AuthUser,
+  ) {
+    await this.requireVisibleProject(projectId, user)
+    await this.assertCanManageProject(projectId, user)
+    await this.findMilestone(projectId, milestoneId)
+
+    if (input.name !== undefined && !input.name.trim()) {
+      throw new BadRequestException('Milestone name cannot be empty')
+    }
+
+    return this.prisma.milestone.update({
+      where: { id: milestoneId },
+      data: {
+        name: input.name?.trim(),
+        description:
+          input.description === undefined ? undefined : input.description?.trim() || null,
+        dueDate: this.toDate(input.dueDate),
+        sortOrder: input.sortOrder,
+      },
+      include: this.approvalInclude,
+    })
+  }
+
+  async deleteMilestone(projectId: string, milestoneId: string, user: AuthUser) {
+    await this.requireVisibleProject(projectId, user)
+    await this.assertCanManageProject(projectId, user)
+    await this.findMilestone(projectId, milestoneId)
+
+    // Approvals reference the milestone (no cascade) — clear them first.
+    await this.prisma.$transaction([
+      this.prisma.milestoneApproval.deleteMany({ where: { milestoneId } }),
+      this.prisma.milestone.delete({ where: { id: milestoneId } }),
+    ])
+    return { deleted: true }
+  }
+
+  // Submit a milestone for the client's approval ("mark as done"). Any assigned
+  // AiTek team member — including developers — can do this (admin or team; a
+  // team member can only reach a project they're a member of). Opens a
+  // MilestoneApproval and moves the milestone to AWAITING_APPROVAL.
+  async submitMilestone(
+    projectId: string,
+    milestoneId: string,
+    input: { completionNote?: string | null },
+    user: AuthUser,
+  ) {
+    await this.requireVisibleProject(projectId, user)
+    this.assertAitekTeam(user)
+    const milestone = await this.findMilestone(projectId, milestoneId)
+
+    if (
+      milestone.status !== MilestoneStatus.PENDING &&
+      milestone.status !== MilestoneStatus.IN_PROGRESS
+    ) {
+      throw new BadRequestException('Only a pending or in-progress milestone can be submitted')
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.milestoneApproval.create({
+        data: {
+          milestoneId,
+          requestedById: user.id,
+          status: MilestoneStatus.AWAITING_APPROVAL,
+          completionNote: input.completionNote?.trim() || null,
+        },
+      }),
+      this.prisma.milestone.update({
+        where: { id: milestoneId },
+        data: { status: MilestoneStatus.AWAITING_APPROVAL },
+      }),
+    ])
+
+    return this.findMilestoneWithApprovals(projectId, milestoneId)
+  }
+
+  async approveMilestone(
+    projectId: string,
+    milestoneId: string,
+    input: { reviewComment?: string | null },
+    user: AuthUser,
+  ) {
+    return this.reviewMilestone(projectId, milestoneId, input, user, true)
+  }
+
+  async rejectMilestone(
+    projectId: string,
+    milestoneId: string,
+    input: { reviewComment?: string | null },
+    user: AuthUser,
+  ) {
+    return this.reviewMilestone(projectId, milestoneId, input, user, false)
+  }
+
+  // Shared approve/reject. Approve → milestone COMPLETED; reject → back to
+  // IN_PROGRESS with the reviewer's feedback.
+  private async reviewMilestone(
+    projectId: string,
+    milestoneId: string,
+    input: { reviewComment?: string | null },
+    user: AuthUser,
+    approved: boolean,
+  ) {
+    await this.requireVisibleProject(projectId, user)
+    this.assertCanApproveMilestones(user)
+    const milestone = await this.findMilestone(projectId, milestoneId)
+
+    if (milestone.status !== MilestoneStatus.AWAITING_APPROVAL) {
+      throw new BadRequestException('This milestone is not awaiting approval')
+    }
+
+    const openApproval = await this.prisma.milestoneApproval.findFirst({
+      where: { milestoneId, status: MilestoneStatus.AWAITING_APPROVAL },
+      orderBy: { requestedAt: 'desc' },
+    })
+
+    await this.prisma.$transaction([
+      ...(openApproval
+        ? [
+            this.prisma.milestoneApproval.update({
+              where: { id: openApproval.id },
+              data: {
+                status: approved ? MilestoneStatus.APPROVED : MilestoneStatus.REJECTED,
+                reviewedById: user.id,
+                reviewedAt: new Date(),
+                reviewComment: input.reviewComment?.trim() || null,
+              },
+            }),
+          ]
+        : []),
+      this.prisma.milestone.update({
+        where: { id: milestoneId },
+        data: approved
+          ? { status: MilestoneStatus.COMPLETED, completedAt: new Date() }
+          : { status: MilestoneStatus.IN_PROGRESS },
+      }),
+    ])
+
+    return this.findMilestoneWithApprovals(projectId, milestoneId)
+  }
+
+  private async findMilestoneWithApprovals(projectId: string, milestoneId: string) {
+    return this.prisma.milestone.findFirst({
+      where: { id: milestoneId, projectId },
+      include: this.approvalInclude,
+    })
   }
 }
