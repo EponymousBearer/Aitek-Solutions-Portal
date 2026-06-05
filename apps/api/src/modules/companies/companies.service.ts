@@ -280,8 +280,15 @@ export class CompaniesService {
   }
 
   async createCompany(input: CreateCompanyInput, user: AuthUser) {
+    // A brand-new client can reach onboarding before their DB user row exists —
+    // the Clerk user.created webhook may not be configured/delivered on dev, so
+    // ClerkAuthGuard falls back to the Clerk id for user.id. Self-heal the row
+    // (getUserContext creates it if missing) and use its real id; otherwise the
+    // membership below violates company_memberships_userId_fkey.
+    const { id: userId } = await this.authService.getUserContext(user.clerkId)
+
     const existing = await this.prisma.companyMembership.findFirst({
-      where: { userId: user.id, isActive: true },
+      where: { userId, isActive: true },
     })
     if (existing) throw new ConflictException('User already belongs to a company')
 
@@ -311,7 +318,7 @@ export class CompaniesService {
 
       await tx.companyMembership.create({
         data: {
-          userId: user.id,
+          userId,
           companyId: created.id,
           role: CompanyMembershipRole.CLIENT_ADMIN,
           isActive: true,
