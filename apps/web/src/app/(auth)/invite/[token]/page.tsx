@@ -14,8 +14,14 @@ import { api } from '@/lib/api'
 interface InviteDetails {
   email: string
   companyId?: string
-  role: string
+  role?: string
+  aitekRole?: 'PROJECT_MANAGER' | 'DEVELOPER'
   type: string
+}
+
+const AITEK_ROLE_LABELS: Record<string, string> = {
+  PROJECT_MANAGER: 'Project Manager',
+  DEVELOPER: 'Developer',
 }
 
 export default function InvitePage() {
@@ -58,7 +64,9 @@ export default function InvitePage() {
         { headers: { Authorization: `Bearer ${token}` } },
       )
       setAccepted(true)
-      setTimeout(() => router.push('/portal'), 2000)
+      // Team members land in the admin area; clients in the portal.
+      const destination = invite?.type === 'aitek_invite' ? '/admin' : '/portal'
+      setTimeout(() => router.push(destination), 2000)
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : 'Failed to accept invite. Please try again.'
@@ -119,6 +127,12 @@ export default function InvitePage() {
         <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm">
           <span className="text-muted-foreground">Invite sent to: </span>
           <span className="font-medium">{invite?.email}</span>
+          {invite?.type === 'aitek_invite' && invite?.aitekRole && (
+            <div className="mt-1">
+              <span className="text-muted-foreground">Role: </span>
+              <span className="font-medium">{AITEK_ROLE_LABELS[invite.aitekRole]}</span>
+            </div>
+          )}
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}

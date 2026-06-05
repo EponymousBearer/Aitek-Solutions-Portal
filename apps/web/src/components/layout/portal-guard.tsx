@@ -8,6 +8,7 @@ import type { OnboardingPhase } from '@aitek/types'
 import { useAuth } from '@clerk/nextjs'
 
 import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { homePathFor } from '@/lib/internal-routes'
 import { routeForPhase } from '@/lib/onboarding'
 
 // Step-aware portal gate driven by the authoritative onboarding phase pointer:
@@ -35,7 +36,7 @@ export function PortalGuard({ children }: { children: React.ReactNode }) {
   // signed out OR the /auth/me call has returned). This blocks the static
   // layout from flashing while we figure out where to send the user.
   const ready = isLoaded && (isSignedIn === false || (!isLoading && user !== undefined))
-  const target = ready && user ? (isAitekTeam ? '/admin' : nextStep(user)) : null
+  const target = ready && user ? (isAitekTeam ? homePathFor(user) : nextStep(user)) : null
 
   useEffect(() => {
     if (target) router.replace(target)

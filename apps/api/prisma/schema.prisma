@@ -33,6 +33,12 @@ enum CompanyMembershipRole {
   CLIENT_ADMIN
 }
 
+// Sub-role for AiTek internal team members (role = AITEK_TEAM_MEMBER).
+enum AitekRole {
+  PROJECT_MANAGER
+  DEVELOPER
+}
+
 enum KYCStatus {
   NOT_STARTED
   PENDING
@@ -217,6 +223,7 @@ model User {
   phone     String?
   avatarUrl String?
   role      UserRole   @default(CLIENT_USER)
+  aitekRole AitekRole? // only set when role = AITEK_TEAM_MEMBER
   status    UserStatus @default(PENDING_VERIFICATION)
 
   createdAt DateTime  @default(now())
@@ -596,6 +603,12 @@ model ProjectMembership {
   role      ProjectMembershipRole
   addedById String?
 
+  // Soft-removal: memberships are deactivated, not deleted, to keep an audit
+  // trail of who had access to a project and when.
+  isActive    Boolean   @default(true)
+  removedAt   DateTime?
+  removedById String?
+
   createdAt DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id])
@@ -604,6 +617,7 @@ model ProjectMembership {
   @@unique([projectId, userId])
   @@index([projectId])
   @@index([userId])
+  @@index([isActive])
   @@map("project_memberships")
 }
 

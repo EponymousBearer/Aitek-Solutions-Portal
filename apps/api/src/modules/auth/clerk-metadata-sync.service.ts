@@ -1,10 +1,11 @@
-import type { CompanyMembershipRole, UserRole } from '@aitek/types'
+import type { AitekRole, CompanyMembershipRole, UserRole } from '@aitek/types'
 import { createClerkClient } from '@clerk/backend'
 import { Injectable, Logger } from '@nestjs/common'
 
 
 interface PublicMetadataInput {
   role?: UserRole
+  aitekRole?: AitekRole
   companyId?: string
   companyMembershipRole?: CompanyMembershipRole
 }
@@ -26,9 +27,12 @@ export class ClerkMetadataSyncService {
   // Fetch a user's identity straight from Clerk. Used as a fallback when the
   // user.created webhook hasn't delivered yet (common in local dev without
   // ngrok) so /auth/me can self-heal by creating the DB row on first call.
-  async getClerkUser(
-    clerkId: string,
-  ): Promise<{ email: string; firstName: string; lastName: string } | null> {
+  async getClerkUser(clerkId: string): Promise<{
+    email: string
+    firstName: string
+    lastName: string
+    publicMetadata: Record<string, unknown>
+  } | null> {
     if (!clerkId || clerkId.startsWith('seed-')) return null
     try {
       const u = await this.clerk.users.getUser(clerkId)
@@ -36,12 +40,34 @@ export class ClerkMetadataSyncService {
         email: u.emailAddresses[0]?.emailAddress ?? '',
         firstName: u.firstName ?? '',
         lastName: u.lastName ?? '',
+        // Invitations stash role/aitekRole here; carried over to the user on
+        // acceptance so the DB row can be created with the right role.
+        publicMetadata: (u.publicMetadata ?? {}) as Record<string, unknown>,
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       this.logger.error(`Clerk getUser failed for ${clerkId}: ${msg}`)
       return null
     }
+  }
+
+  // Create a Clerk invitation. Clerk emails the recipient a link to
+  // `redirectUrl` with a one-time ticket; on the sign-up page they set a
+  // password (email is pre-verified). The publicMetadata (role / aitekRole) is
+  // copied onto the user when they accept.
+  async createInvitation(params: {
+    email: string
+    publicMetadata: Record<string, unknown>
+    redirectUrl: string
+  }): Promise<{ id: string; url: string; status: string }> {
+    const inv = await this.clerk.invitations.createInvitation({
+      emailAddress: params.email,
+      publicMetadata: params.publicMetadata,
+      redirectUrl: params.redirectUrl,
+      notify: true,
+      ignoreExisting: false,
+    })
+    return { id: inv.id, url: inv.url ?? '', status: inv.status }
   }
 
   async sync(clerkId: string, metadata: PublicMetadataInput): Promise<void> {
@@ -53,6 +79,7 @@ export class ClerkMetadataSyncService {
 
     const cleaned: Record<string, unknown> = {}
     if (metadata.role !== undefined) cleaned['role'] = metadata.role
+    if (metadata.aitekRole !== undefined) cleaned['aitekRole'] = metadata.aitekRole
     if (metadata.companyId !== undefined) cleaned['companyId'] = metadata.companyId
     if (metadata.companyMembershipRole !== undefined) {
       cleaned['companyMembershipRole'] = metadata.companyMembershipRole

@@ -1,5 +1,12 @@
 
-import { CompanyMembershipRole, KYCStatus, OnboardingPhase, UserRole } from '@aitek/types'
+import {
+  CompanyMembershipRole,
+  KYCStatus,
+  OnboardingPhase,
+  ProjectMembershipRole,
+  ProjectStatus,
+  UserRole,
+} from '@aitek/types'
 import type { AuthUser, CreateCompanyInput, UpdateCompanyInput } from '@aitek/types'
 import {
   BadRequestException,
@@ -215,17 +222,52 @@ export class CompaniesService {
       throw new ConflictException('Company is already approved')
     }
 
-    await this.prisma.$transaction([
-      this.prisma.company.update({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.company.update({
         where: { id: companyId },
         data: { portalAccessGranted: true, kycStatus: KYCStatus.APPROVED },
-      }),
+      })
       // Keep the KYC submission in sync so it leaves the review queue.
-      this.prisma.kYCSubmission.updateMany({
+      await tx.kYCSubmission.updateMany({
         where: { companyId, status: { in: [KYCStatus.UNDER_REVIEW, KYCStatus.PENDING] } },
         data: { status: KYCStatus.APPROVED, reviewedById: user.id, reviewedAt: new Date() },
-      }),
-    ])
+      })
+      // PRD flow: Admin Review → Project Creation → Portal Access. Seed the
+      // client's first project from the onboarding (only if they have none yet).
+      const existingProject = await tx.project.findFirst({
+        where: { companyId, deletedAt: null },
+        select: { id: true },
+      })
+      if (!existingProject) {
+        const project = await tx.project.create({
+          data: {
+            companyId,
+            name: company.name,
+            slug: this.generateSlug(company.name),
+            description: 'Initial engagement created from onboarding.',
+            status: ProjectStatus.DISCOVERY,
+            createdById: user.id,
+          },
+        })
+        // Assign the onboarding client (company owner/admin) to their own
+        // project as a stakeholder, so it shows up in their portal by default.
+        const owners = await tx.companyMembership.findMany({
+          where: { companyId, isActive: true, role: CompanyMembershipRole.CLIENT_ADMIN },
+          select: { userId: true },
+        })
+        if (owners.length > 0) {
+          await tx.projectMembership.createMany({
+            data: owners.map((o) => ({
+              projectId: project.id,
+              userId: o.userId,
+              role: ProjectMembershipRole.CLIENT_STAKEHOLDER,
+              addedById: user.id,
+            })),
+            skipDuplicates: true,
+          })
+        }
+      }
+    })
 
     const admin = company.memberships[0]?.user
     if (admin) {

@@ -1,5 +1,5 @@
 
-import { CompanyMembershipRole, UserRole } from '@aitek/types'
+import { AitekRole, CompanyMembershipRole, UserRole } from '@aitek/types'
 import type { AuthUser } from '@aitek/types'
 import {
   BadRequestException,
@@ -72,14 +72,53 @@ export class AuthController {
     return { received: true }
   }
 
+  // Two kinds of invite:
+  //  - Company invite: `companyId` (+ optional `role`) → adds the invitee as a
+  //    client user/admin of that company.
+  //  - AiTek team invite: `aitekRole` (PROJECT_MANAGER | DEVELOPER), no company →
+  //    promotes the invitee to an internal team member.
   @Post('invite')
   @UseGuards(ClerkAuthGuard)
   @Roles(UserRole.AITEK_ADMIN)
   async createInvite(
-    @Body() body: { email: string; companyId?: string; role?: CompanyMembershipRole },
+    @Body()
+    body: {
+      email: string
+      companyId?: string
+      role?: CompanyMembershipRole
+      aitekRole?: AitekRole
+    },
   ) {
+    const email = body.email?.trim()
+    if (!email) throw new BadRequestException('Email is required')
+
+    // AiTek team invite → Clerk invitation: Clerk emails a link; the invitee
+    // sets a password on the sign-up page (email pre-verified).
+    if (body.aitekRole) {
+      try {
+        const inv = await this.authService.inviteAitekMember(email, body.aitekRole)
+        return { sent: true, email, inviteUrl: inv.url, invitationId: inv.id, status: inv.status }
+      } catch (err) {
+        // Clerk rejects duplicate invitations / already-registered emails.
+        const status = (err as { status?: number })?.status
+        const detail =
+          (err as { errors?: Array<{ message?: string; longMessage?: string }> })?.errors?.[0]
+        const message = detail?.longMessage ?? detail?.message
+        if (status === 400 || status === 422) {
+          throw new BadRequestException(
+            message ?? 'Could not invite this email — it may already be registered or invited.',
+          )
+        }
+        throw err
+      }
+    }
+
+    // Company (client) invite → JWT link, accepted in-app.
+    if (!body.companyId) {
+      throw new BadRequestException('companyId is required for a company invite')
+    }
     const token = this.authService.createInviteToken(
-      body.email,
+      email,
       body.role ?? CompanyMembershipRole.CLIENT_USER,
       body.companyId,
     )
@@ -94,6 +133,7 @@ export class AuthController {
       email: payload.email,
       companyId: payload.companyId,
       role: payload.membershipRole,
+      aitekRole: payload.aitekRole,
       type: payload.type,
     }
   }
