@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 
 import { OnboardingPhase } from '@aitek/types'
 import { useClerk } from '@clerk/nextjs'
+import { useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Clock, Loader2, LogOut, Mail } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,7 @@ import { useOnboardingPhaseGuard } from '@/hooks/useOnboardingProgress'
 export default function PendingPage() {
   const router = useRouter()
   const { signOut } = useClerk()
+  const queryClient = useQueryClient()
   const { user, isLoading: userLoading } = useCurrentUser()
   // SUBMITTED is the only phase that belongs here. If an admin reopened a phase,
   // the pointer regresses and the guard bounces the client to that phase.
@@ -45,7 +47,10 @@ export default function PendingPage() {
           variant="ghost"
           size="sm"
           className="text-muted-foreground"
-          onClick={() => void signOut(() => router.push('/sign-in'))}
+          onClick={() => {
+            queryClient.clear()
+            void signOut(() => router.push('/sign-in'))
+          }}
         >
           <LogOut className="mr-2 h-4 w-4" />
           Sign out
