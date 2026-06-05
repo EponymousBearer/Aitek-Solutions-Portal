@@ -85,11 +85,14 @@ export class ClerkAuthGuard implements CanActivate {
         (dbUser?.aitekRole as AitekRole | null | undefined) ??
         (payload['aitekRole'] as AitekRole) ??
         undefined,
-      companyId: membership?.companyId ?? (payload['companyId'] as string) ?? undefined,
-      companyMembershipRole:
-        (membership?.role as CompanyMembershipRole | undefined) ??
-        (payload['companyMembershipRole'] as CompanyMembershipRole) ??
-        undefined,
+      // Company identity is taken ONLY from the active DB membership — never the
+      // JWT claim. The token can outlive the data (e.g. the company was deleted
+      // or the DB reset while Clerk publicMetadata still carries the old
+      // companyId); trusting that stale claim makes downstream
+      // findUniqueOrThrow({ id }) calls 500. No active membership ⇒ no company,
+      // and the client is routed back through onboarding.
+      companyId: membership?.companyId ?? undefined,
+      companyMembershipRole: (membership?.role as CompanyMembershipRole | undefined) ?? undefined,
     }
 
     request.user = user
