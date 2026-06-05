@@ -428,6 +428,12 @@ export class ProjectsService {
     return project
   }
 
+  // Public access gate for project-scoped sibling modules (e.g. Documents).
+  // Returns { id, companyId, leadUserId } or throws 404 if the user can't see it.
+  async requireProjectAccess(projectId: string, user: AuthUser) {
+    return this.requireVisibleProject(projectId, user)
+  }
+
   // Create / edit / submit milestones is gated by assertCanManageProject
   // (admin or the project's lead PM) — developers are view-only.
 
