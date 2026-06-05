@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 
 import { useClerk, useUser } from '@clerk/nextjs'
+import { useQueryClient } from '@tanstack/react-query'
 import { LogOut } from 'lucide-react'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -22,6 +23,7 @@ export function AdminUserMenu() {
   const { user } = useUser()
   const { signOut } = useClerk()
   const router = useRouter()
+  const queryClient = useQueryClient()
 
   const initials =
     [user?.firstName, user?.lastName]
@@ -55,7 +57,10 @@ export function AdminUserMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="text-destructive focus:text-destructive"
-          onClick={() => void signOut(() => router.push('/sign-in'))}
+          onClick={() => {
+            queryClient.clear()
+            void signOut(() => router.push('/sign-in'))
+          }}
         >
           <LogOut className="mr-2 h-4 w-4" />
           Sign out
