@@ -19,12 +19,15 @@ interface ChatMessage {
   isInternal: boolean
   deleted: boolean
   createdAt: string
-  sender: { id: string; firstName: string; lastName: string } | null
+  sender: { id: string; firstName: string; lastName: string; email: string } | null
 }
 
 function senderName(m: ChatMessage): string {
   if (!m.sender) return 'Unknown'
-  return `${m.sender.firstName} ${m.sender.lastName}`.trim() || 'Unknown'
+  const name = `${m.sender.firstName} ${m.sender.lastName}`.trim()
+  if (name) return name
+  // Fall back to the email's local part when the account has no name set.
+  return m.sender.email ? (m.sender.email.split('@')[0] || m.sender.email) : 'Unknown'
 }
 
 function fmtTime(iso: string): string {
