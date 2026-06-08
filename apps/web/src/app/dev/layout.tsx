@@ -5,7 +5,10 @@ import { RequireInternalRole } from '@/components/layout/require-internal-role'
 // Auth state is per-request — do not pre-render.
 export const dynamic = 'force-dynamic'
 
-const NAV: InternalNavItem[] = [{ href: '/dev', label: 'My Projects', icon: 'dashboard', exact: true }]
+const NAV: InternalNavItem[] = [
+  { href: '/dev', label: 'My Projects', icon: 'dashboard', exact: true },
+  { href: '/dev/messages', label: 'Messages', icon: 'messages' },
+]
 
 export default function DevLayout({ children }: { children: React.ReactNode }) {
   return (

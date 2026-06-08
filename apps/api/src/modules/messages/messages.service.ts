@@ -10,6 +10,7 @@ const senderSelect = {
   id: true,
   firstName: true,
   lastName: true,
+  email: true,
   role: true,
   aitekRole: true,
 } as const
@@ -28,6 +29,7 @@ type RawMessage = {
     id: string
     firstName: string
     lastName: string
+    email: string
     role: string
     aitekRole: string | null
   } | null
