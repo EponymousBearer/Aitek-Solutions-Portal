@@ -14,6 +14,7 @@ import {
   FileText,
   Receipt,
   UserCog,
+  MessageSquare,
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
@@ -24,6 +25,7 @@ const NAV_ITEMS = [
   { href: '/admin/kyc', label: 'KYC Review', icon: ShieldCheck },
   { href: '/admin/custom-requests', label: 'Custom Requests', icon: Sparkles },
   { href: '/admin/projects', label: 'Projects', icon: FolderKanban },
+  { href: '/admin/messages', label: 'Messages', icon: MessageSquare },
   { href: '/admin/questionnaires', label: 'Questionnaires', icon: FileQuestion },
   { href: '/admin/services', label: 'Services', icon: Briefcase },
   { href: '/admin/agreements', label: 'Agreements', icon: FileText },

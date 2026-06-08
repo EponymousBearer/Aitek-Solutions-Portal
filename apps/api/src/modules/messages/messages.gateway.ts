@@ -6,7 +6,7 @@ import { OnEvent } from '@nestjs/event-emitter'
 import {
   ConnectedSocket,
   MessageBody,
-  type OnGatewayConnection,
+  type OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
@@ -29,7 +29,7 @@ const internalRoom = (projectId: string) => `project:${projectId}:internal`
     credentials: false,
   },
 })
-export class MessagesGateway implements OnGatewayConnection {
+export class MessagesGateway implements OnGatewayInit {
   private readonly logger = new Logger(MessagesGateway.name)
 
   @WebSocketServer() server!: Server
@@ -39,22 +39,29 @@ export class MessagesGateway implements OnGatewayConnection {
     private messages: MessagesService,
   ) {}
 
-  async handleConnection(client: Socket) {
-    try {
-      const auth = client.handshake.auth as { token?: string } | undefined
-      const headerToken = client.handshake.headers['authorization']?.replace('Bearer ', '')
-      const token = auth?.token || headerToken
-      if (!token) throw new Error('missing token')
+  // Authenticate during the handshake. Socket.io awaits this middleware before
+  // the connection is established or any client events fire, so socket.data.user
+  // is guaranteed set before `room:join` is handled (avoids the race a plain
+  // async handleConnection had, which left clients out of the broadcast room).
+  afterInit(server: Server) {
+    server.use(async (socket, next) => {
+      try {
+        const auth = socket.handshake.auth as { token?: string } | undefined
+        const headerToken = socket.handshake.headers['authorization']?.replace('Bearer ', '')
+        const token = auth?.token || headerToken
+        if (!token) throw new Error('missing token')
 
-      const payload = await verifyToken(token, {
-        secretKey: process.env['CLERK_SECRET_KEY'] ?? '',
-      })
-      const user = await this.hydrate(payload.sub)
-      if (!user) throw new Error('user not found')
-      client.data.user = user
-    } catch {
-      client.disconnect(true)
-    }
+        const payload = await verifyToken(token, {
+          secretKey: process.env['CLERK_SECRET_KEY'] ?? '',
+        })
+        const user = await this.hydrate(payload.sub)
+        if (!user) throw new Error('user not found')
+        socket.data.user = user
+        next()
+      } catch {
+        next(new Error('unauthorized'))
+      }
+    })
   }
 
   @SubscribeMessage('room:join')

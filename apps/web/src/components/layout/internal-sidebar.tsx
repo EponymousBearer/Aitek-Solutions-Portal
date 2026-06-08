@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
-import { FolderKanban, LayoutDashboard, type LucideIcon } from 'lucide-react'
+import { FolderKanban, LayoutDashboard, MessageSquare, type LucideIcon } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 const ICONS: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard,
   projects: FolderKanban,
+  messages: MessageSquare,
 }
 
 export interface InternalNavItem {
