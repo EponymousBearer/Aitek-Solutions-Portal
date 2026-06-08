@@ -7,14 +7,12 @@ services:
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - /etc/letsencrypt:/etc/nginx/certs:ro
-      - /home/projects/quic-quic:/var/www/altalabatalaminah.com:ro
     depends_on:
       - web
       - api
     restart: unless-stopped
     networks:
       - public
-      - zg_proxy
 
   web:
     build:
@@ -104,5 +102,3 @@ networks:
   public:
   internal:
     internal: true
-  zg_proxy:
-    external: true
