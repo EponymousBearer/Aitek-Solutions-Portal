@@ -1,0 +1,12 @@
+'use client'
+
+import { ThemeProvider as NextThemeProvider } from 'next-themes'
+
+// Light is the app default; users can switch to dark (header toggle).
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <NextThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
+      {children}
+    </NextThemeProvider>
+  )
+}

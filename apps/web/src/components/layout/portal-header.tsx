@@ -6,6 +6,7 @@ import { useClerk, useUser } from '@clerk/nextjs'
 import { useQueryClient } from '@tanstack/react-query'
 import { LogOut } from 'lucide-react'
 
+import { ThemeToggle } from '@/components/layout/theme-toggle'
 import { NotificationBell } from '@/components/notifications/notification-bell'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -35,9 +36,11 @@ export function PortalHeader() {
 
   return (
     <header className="flex h-16 items-center justify-between border-b bg-background px-6">
-      <div />
+      <span className="text-sm font-medium text-foreground">Client Portal</span>
 
       <div className="flex items-center gap-3">
+        <ThemeToggle />
+
         {/* Notification bell */}
         <NotificationBell />
 
