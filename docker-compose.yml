@@ -54,6 +54,7 @@ services:
       - R2_ENDPOINT=${R2_ENDPOINT}
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
       - RESEND_API_KEY=${RESEND_API_KEY}
+      - EMAIL_FROM=${EMAIL_FROM}
       - SENTRY_DSN=${SENTRY_DSN}
     restart: unless-stopped
     depends_on:
