@@ -1,6 +1,7 @@
 import { AdminUserMenu } from '@/components/layout/admin-user-menu'
 import { InternalSidebar, type InternalNavItem } from '@/components/layout/internal-sidebar'
 import { RequireInternalRole } from '@/components/layout/require-internal-role'
+import { ThemeToggle } from '@/components/layout/theme-toggle'
 import { NotificationBell } from '@/components/notifications/notification-bell'
 
 // Auth state is per-request — do not pre-render.
@@ -23,6 +24,7 @@ export default function PmLayout({ children }: { children: React.ReactNode }) {
               <span className="rounded-md bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700">
                 Project Manager
               </span>
+              <ThemeToggle />
               <NotificationBell />
               <AdminUserMenu />
             </div>
