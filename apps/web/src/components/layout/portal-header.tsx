@@ -4,8 +4,9 @@ import { useRouter } from 'next/navigation'
 
 import { useClerk, useUser } from '@clerk/nextjs'
 import { useQueryClient } from '@tanstack/react-query'
-import { Bell, LogOut } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 
+import { NotificationBell } from '@/components/notifications/notification-bell'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -38,12 +39,7 @@ export function PortalHeader() {
 
       <div className="flex items-center gap-3">
         {/* Notification bell */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-4 w-4" />
-          {/* Unread badge — populated in Prompt 11 */}
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" />
-          <span className="sr-only">Notifications</span>
-        </Button>
+        <NotificationBell />
 
         {/* User menu */}
         <DropdownMenu>

@@ -13,6 +13,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 
 import { PrismaService } from '../../prisma/prisma.service'
 
@@ -68,7 +69,10 @@ const companyOnboardingInclude = {
 
 @Injectable()
 export class ProjectsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private events: EventEmitter2,
+  ) {}
 
   private isAitekTeam(user: AuthUser): boolean {
     return user.role === UserRole.AITEK_ADMIN || user.role === UserRole.AITEK_TEAM_MEMBER
@@ -170,7 +174,7 @@ export class ProjectsService {
       select: { userId: true },
     })
 
-    return this.prisma.project.create({
+    const project = await this.prisma.project.create({
       data: {
         companyId: input.companyId,
         name: input.name.trim(),
@@ -188,6 +192,13 @@ export class ProjectsService {
       },
       include: { company: { select: { id: true, name: true } } },
     })
+
+    this.events.emit('project.created', {
+      projectId: project.id,
+      companyId: input.companyId,
+      actorId: user.id,
+    })
+    return project
   }
 
   async update(id: string, input: UpdateProjectInput, user: AuthUser) {
@@ -544,7 +555,7 @@ export class ProjectsService {
     input: { completionNote?: string | null },
     user: AuthUser,
   ) {
-    await this.requireVisibleProject(projectId, user)
+    const project = await this.requireVisibleProject(projectId, user)
     this.assertAitekTeam(user)
     const milestone = await this.findMilestone(projectId, milestoneId)
 
@@ -570,6 +581,12 @@ export class ProjectsService {
       }),
     ])
 
+    this.events.emit('milestone.submitted', {
+      projectId,
+      companyId: project.companyId,
+      milestoneName: milestone.name,
+      actorId: user.id,
+    })
     return this.findMilestoneWithApprovals(projectId, milestoneId)
   }
 
@@ -635,6 +652,12 @@ export class ProjectsService {
       }),
     ])
 
+    this.events.emit('milestone.reviewed', {
+      projectId,
+      milestoneName: milestone.name,
+      approved,
+      actorId: user.id,
+    })
     return this.findMilestoneWithApprovals(projectId, milestoneId)
   }
 
