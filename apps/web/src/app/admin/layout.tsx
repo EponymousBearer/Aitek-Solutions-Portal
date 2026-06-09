@@ -27,7 +27,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <AdminUserMenu />
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto bg-slate-50/50 p-6">{children}</main>
+          <main className="flex-1 overflow-y-auto bg-canvas p-6">{children}</main>
         </div>
       </div>
     </AdminGuard>
