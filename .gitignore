@@ -33,7 +33,6 @@ coverage
 .nyc_output
 
 # IDE
-.vscode
 .idea
 *.swp
 *.swo

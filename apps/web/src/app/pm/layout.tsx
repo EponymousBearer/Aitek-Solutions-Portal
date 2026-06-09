@@ -16,7 +16,7 @@ export default function PmLayout({ children }: { children: React.ReactNode }) {
   return (
     <RequireInternalRole area="PM">
       <div className="flex h-screen overflow-hidden bg-background">
-        <InternalSidebar subtitle="Project Manager" items={NAV} />
+        <InternalSidebar items={NAV} />
         <div className="flex flex-1 flex-col overflow-hidden">
           <header className="flex h-16 items-center justify-between border-b bg-background px-6">
             <span className="text-sm font-medium text-foreground">Project Manager</span>
