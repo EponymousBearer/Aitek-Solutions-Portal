@@ -1,6 +1,7 @@
 import { NotificationType } from '@aitek/types'
 import type { AuthUser } from '@aitek/types'
 import { Injectable } from '@nestjs/common'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 
 import { PrismaService } from '../../prisma/prisma.service'
 
@@ -15,7 +16,10 @@ interface NotifyInput {
 
 @Injectable()
 export class NotificationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private events: EventEmitter2,
+  ) {}
 
   // Fan out one notification to many users (deduped). No-op for an empty list.
   async notify(userIds: string[], input: NotifyInput): Promise<void> {
@@ -30,6 +34,8 @@ export class NotificationsService {
         data: (input.data ?? {}) as object,
       })),
     })
+    // Push a realtime signal so each recipient's bell updates instantly.
+    this.events.emit('notification.push', { userIds: unique })
   }
 
   async list(user: AuthUser, opts: { cursor?: string; limit?: number }) {

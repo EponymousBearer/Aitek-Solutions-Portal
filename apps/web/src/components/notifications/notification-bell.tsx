@@ -4,13 +4,17 @@ import { useEffect, useRef, useState } from 'react'
 
 import { useRouter } from 'next/navigation'
 
+import { useAuth } from '@clerk/nextjs'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, Loader2 } from 'lucide-react'
+import { io, type Socket } from 'socket.io-client'
 
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { api } from '@/lib/api'
 import { homePathFor } from '@/lib/internal-routes'
 import { cn } from '@/lib/utils'
+
+const SOCKET_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'
 
 interface NotificationItem {
   id: string
@@ -35,9 +39,35 @@ function timeAgo(iso: string): string {
 export function NotificationBell() {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const { getToken } = useAuth()
   const { user } = useCurrentUser()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+
+  const refreshNotifications = () => {
+    void queryClient.invalidateQueries({ queryKey: ['notifications-unread'] })
+    void queryClient.invalidateQueries({ queryKey: ['notifications-list'] })
+  }
+
+  // Realtime push: the gateway auto-joins this socket to the user's room and
+  // emits `notification:new`; we refetch on that signal (polling stays as a
+  // fallback). Defined here so the effect can use it.
+  const refreshRef = useRef(refreshNotifications)
+  refreshRef.current = refreshNotifications
+  useEffect(() => {
+    let socket: Socket | null = null
+    let cancelled = false
+    void (async () => {
+      const token = await getToken({ template: 'aitek-portal-default' }).catch(() => getToken())
+      if (cancelled || !token) return
+      socket = io(SOCKET_URL, { auth: { token }, transports: ['websocket', 'polling'] })
+      socket.on('notification:new', () => refreshRef.current())
+    })()
+    return () => {
+      cancelled = true
+      socket?.disconnect()
+    }
+  }, [getToken])
 
   // Unread count — polled so the badge stays fresh without a socket.
   const { data: countData } = useQuery<{ count: number }>({
@@ -58,18 +88,13 @@ export function NotificationBell() {
     enabled: open,
   })
 
-  const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: ['notifications-unread'] })
-    void queryClient.invalidateQueries({ queryKey: ['notifications-list'] })
-  }
-
   const markRead = useMutation({
     mutationFn: async (id: string) => api.post(`/notifications/${id}/read`),
-    onSuccess: refresh,
+    onSuccess: refreshNotifications,
   })
   const markAll = useMutation({
     mutationFn: async () => api.post('/notifications/read-all'),
-    onSuccess: refresh,
+    onSuccess: refreshNotifications,
   })
 
   // Close on outside click.
