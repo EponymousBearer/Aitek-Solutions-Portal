@@ -14,6 +14,7 @@ import { CustomRequestsModule } from './modules/custom-requests/custom-requests.
 import { HealthModule } from './modules/health/health.module'
 import { KycModule } from './modules/kyc/kyc.module'
 import { MessagesModule } from './modules/messages/messages.module'
+import { NotificationsModule } from './modules/notifications/notifications.module'
 import { OnboardingModule } from './modules/onboarding/onboarding.module'
 import { ProjectsModule } from './modules/projects/projects.module'
 import { QuestionnaireModule } from './modules/questionnaire/questionnaire.module'
@@ -57,6 +58,7 @@ import { PrismaModule } from './prisma/prisma.module'
     ProjectsModule,
     TeamModule,
     MessagesModule,
+    NotificationsModule,
   ],
   providers: [
     // Global guards. ClerkAuthGuard needs DI (Prisma) so it can't be

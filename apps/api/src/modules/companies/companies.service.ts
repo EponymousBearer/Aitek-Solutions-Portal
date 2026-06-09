@@ -16,6 +16,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 
 import { PrismaService } from '../../prisma/prisma.service'
 import { AuthService } from '../auth/auth.service'
@@ -32,6 +33,7 @@ export class CompaniesService {
     private authService: AuthService,
     private metadataSync: ClerkMetadataSyncService,
     private emailService: EmailService,
+    private events: EventEmitter2,
   ) {}
 
   // ─── Admin: pending-approval queue ─────────────────────────────────────────
@@ -222,6 +224,7 @@ export class CompaniesService {
       throw new ConflictException('Company is already approved')
     }
 
+    let createdProjectId: string | null = null
     await this.prisma.$transaction(async (tx) => {
       await tx.company.update({
         where: { id: companyId },
@@ -249,6 +252,7 @@ export class CompaniesService {
             createdById: user.id,
           },
         })
+        createdProjectId = project.id
         // Assign the onboarding client (company owner/admin) to their own
         // project as a stakeholder, so it shows up in their portal by default.
         const owners = await tx.companyMembership.findMany({
@@ -274,6 +278,11 @@ export class CompaniesService {
       const portalUrl = `${process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000'}/portal`
       // Don't fail the approval if email send fails — log only.
       void this.emailService.sendApprovalEmail(admin.email, admin.firstName, portalUrl)
+    }
+
+    // Notify the client that their first project is live (after the tx commits).
+    if (createdProjectId) {
+      this.events.emit('project.created', { projectId: createdProjectId, companyId, actorId: user.id })
     }
 
     return { approved: true }
