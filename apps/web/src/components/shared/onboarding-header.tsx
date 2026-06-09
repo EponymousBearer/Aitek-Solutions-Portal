@@ -2,6 +2,8 @@
 
 import { usePathname } from 'next/navigation'
 
+import { BrandLogo } from '@/components/layout/brand-logo'
+
 const ONBOARDING_STEPS = [
   { id: 'company', label: 'Company', path: '/onboarding/company' },
   { id: 'kyc', label: 'Verification', path: '/onboarding/kyc' },
@@ -19,12 +21,9 @@ export function OnboardingHeader() {
       <div className="mx-auto max-w-4xl px-6 py-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <span className="text-sm font-bold text-white">A</span>
-            </div>
-            <span className="text-sm font-semibold text-foreground">AiTek Portal</span>
-          </div>
+          <span className="inline-flex rounded-md dark:bg-white dark:p-1.5">
+            <BrandLogo src="/logo-mark.webp" className="h-7 w-auto" />
+          </span>
 
           {/* Step indicators */}
           <nav className="hidden items-center gap-1 sm:flex">

@@ -16,7 +16,7 @@ export default function DevLayout({ children }: { children: React.ReactNode }) {
   return (
     <RequireInternalRole area="DEV">
       <div className="flex h-screen overflow-hidden bg-background">
-        <InternalSidebar subtitle="Developer" items={NAV} />
+        <InternalSidebar items={NAV} />
         <div className="flex flex-1 flex-col overflow-hidden">
           <header className="flex h-16 items-center justify-between border-b bg-background px-6">
             <span className="text-sm font-medium text-foreground">Developer</span>
