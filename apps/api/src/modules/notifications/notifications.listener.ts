@@ -1,4 +1,9 @@
-import { CompanyMembershipRole, NotificationType, ProjectMembershipRole } from '@aitek/types'
+import {
+  CompanyMembershipRole,
+  NotificationType,
+  ProjectMembershipRole,
+  UserRole,
+} from '@aitek/types'
 import { Injectable } from '@nestjs/common'
 import { OnEvent } from '@nestjs/event-emitter'
 
@@ -38,17 +43,24 @@ export class NotificationsListener {
     private notifications: NotificationsService,
   ) {}
 
-  // The AiTek team assigned to a project (lead + members).
+  // The AiTek side of a project: the assigned lead + members, PLUS all AiTek
+  // admins (they oversee every project, so they're always notified).
   private async aitekUserIds(projectId: string): Promise<string[]> {
-    const rows = await this.prisma.projectMembership.findMany({
-      where: {
-        projectId,
-        isActive: true,
-        role: { in: [ProjectMembershipRole.AITEK_LEAD, ProjectMembershipRole.AITEK_MEMBER] },
-      },
-      select: { userId: true },
-    })
-    return rows.map((r) => r.userId)
+    const [members, admins] = await Promise.all([
+      this.prisma.projectMembership.findMany({
+        where: {
+          projectId,
+          isActive: true,
+          role: { in: [ProjectMembershipRole.AITEK_LEAD, ProjectMembershipRole.AITEK_MEMBER] },
+        },
+        select: { userId: true },
+      }),
+      this.prisma.user.findMany({
+        where: { role: UserRole.AITEK_ADMIN, deletedAt: null },
+        select: { id: true },
+      }),
+    ])
+    return [...members.map((r) => r.userId), ...admins.map((a) => a.id)]
   }
 
   // The client side of a project: stakeholders + the company's client admins.

@@ -6,6 +6,7 @@ import { OnEvent } from '@nestjs/event-emitter'
 import {
   ConnectedSocket,
   MessageBody,
+  type OnGatewayConnection,
   type OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
@@ -19,6 +20,7 @@ import { MessagesService, type MessageEvent } from './messages.service'
 
 const room = (projectId: string) => `project:${projectId}`
 const internalRoom = (projectId: string) => `project:${projectId}:internal`
+const userRoom = (userId: string) => `user:${userId}`
 
 // Real-time message delivery. Connections are authenticated with the Clerk
 // session token (handshake.auth.token); clients join a project room (+ an
@@ -29,7 +31,7 @@ const internalRoom = (projectId: string) => `project:${projectId}:internal`
     credentials: false,
   },
 })
-export class MessagesGateway implements OnGatewayInit {
+export class MessagesGateway implements OnGatewayInit, OnGatewayConnection {
   private readonly logger = new Logger(MessagesGateway.name)
 
   @WebSocketServer() server!: Server
@@ -62,6 +64,13 @@ export class MessagesGateway implements OnGatewayInit {
         next(new Error('unauthorized'))
       }
     })
+  }
+
+  // After auth, every socket joins its owner's personal room so notifications
+  // can be pushed to that user instantly.
+  handleConnection(client: Socket) {
+    const user = client.data.user as AuthUser | undefined
+    if (user) void client.join(userRoom(user.id))
   }
 
   @SubscribeMessage('room:join')
@@ -98,6 +107,15 @@ export class MessagesGateway implements OnGatewayInit {
   handleDeleted(evt: MessageEvent) {
     const target = evt.isInternal ? internalRoom(evt.projectId) : room(evt.projectId)
     this.server.to(target).emit('message:deleted', evt.message)
+  }
+
+  // Push a "you have a new notification" signal to each recipient's user room.
+  // The client refetches the unread count + list — no sensitive data is sent.
+  @OnEvent('notification.push')
+  handleNotificationPush(evt: { userIds: string[] }) {
+    for (const userId of evt.userIds) {
+      this.server.to(userRoom(userId)).emit('notification:new')
+    }
   }
 
   private isAitek(user: AuthUser): boolean {
