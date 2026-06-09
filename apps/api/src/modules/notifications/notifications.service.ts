@@ -24,6 +24,28 @@ type EmailPrefField =
   | 'emailOnAgreement'
   | 'emailOnProject'
 
+// Every email-preference flag, with its default. New users (no row yet) are
+// treated as fully opted-in.
+const PREF_FIELDS: EmailPrefField[] = [
+  'emailOnMessage',
+  'emailOnMilestone',
+  'emailOnKYC',
+  'emailOnInvoice',
+  'emailOnAgreement',
+  'emailOnProject',
+]
+
+export type NotificationPreferences = Record<EmailPrefField, boolean>
+
+const DEFAULT_PREFERENCES: NotificationPreferences = {
+  emailOnMessage: true,
+  emailOnMilestone: true,
+  emailOnKYC: true,
+  emailOnInvoice: true,
+  emailOnAgreement: true,
+  emailOnProject: true,
+}
+
 // Which NotificationPreference flag gates the email for each type. Types not
 // listed here get the in-app + realtime notification but NO email — notably
 // MESSAGE_RECEIVED, since emailing every chat message would be spam.
@@ -155,5 +177,36 @@ export class NotificationsService {
       data: { isRead: true, readAt: new Date() },
     })
     return { updated: res.count }
+  }
+
+  // Email-notification preferences for the current user. Defaults to all-on
+  // when the user has no preference row yet (matches sendEmails' behaviour).
+  async getPreferences(user: AuthUser): Promise<NotificationPreferences> {
+    const pref = await this.prisma.notificationPreference.findUnique({
+      where: { userId: user.id },
+    })
+    if (!pref) return { ...DEFAULT_PREFERENCES }
+    return PREF_FIELDS.reduce((acc, f) => {
+      acc[f] = pref[f]
+      return acc
+    }, {} as NotificationPreferences)
+  }
+
+  // Upsert only the recognised boolean fields from the patch (no validation
+  // pipe in this app, so we whitelist here).
+  async updatePreferences(
+    user: AuthUser,
+    patch: Partial<NotificationPreferences>,
+  ): Promise<NotificationPreferences> {
+    const data: Partial<NotificationPreferences> = {}
+    for (const f of PREF_FIELDS) {
+      if (typeof patch[f] === 'boolean') data[f] = patch[f]
+    }
+    await this.prisma.notificationPreference.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id, ...DEFAULT_PREFERENCES, ...data },
+      update: data,
+    })
+    return this.getPreferences(user)
   }
 }
