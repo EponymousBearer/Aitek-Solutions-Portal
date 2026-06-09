@@ -68,6 +68,33 @@ export class EmailService {
     `
   }
 
+  // Generic notification email — mirrors an in-app notification (title + body +
+  // a link back into the portal).
+  async sendNotificationEmail(
+    to: string,
+    n: { title: string; body: string; link: string },
+  ): Promise<void> {
+    const safeTitle = n.title.replace(/</g, '&lt;')
+    const safeBody = n.body.replace(/</g, '&lt;')
+    const html = `
+      <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#0f172a;">
+        <h2 style="margin:0 0 12px;">${safeTitle}</h2>
+        <p style="color:#334155;">${safeBody}</p>
+        <p style="margin:24px 0;">
+          <a href="${n.link}"
+             style="display:inline-block;background:#0f172a;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:500;">
+            View in AiTek Portal
+          </a>
+        </p>
+        <p style="color:#94a3b8;font-size:12px;">
+          You’re receiving this because of your notification settings.
+        </p>
+        <p style="color:#64748b;font-size:13px;">&mdash; The AiTek team</p>
+      </div>
+    `
+    await this.send(to, safeTitle, html)
+  }
+
   private async send(to: string, subject: string, html: string): Promise<void> {
     if (!this.resendKey) {
       this.logger.warn(
