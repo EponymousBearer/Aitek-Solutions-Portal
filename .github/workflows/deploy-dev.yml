@@ -36,4 +36,4 @@ jobs:
           # Sync the repo on the VPS to the latest scripts, then run the deploy.
           # (deploy.sh re-syncs to origin/dev itself, builds, migrates, restarts.)
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$VPS_USER@$VPS_HOST" \
-            'cd /opt/aitek-portal && git fetch origin dev && git checkout -f dev && git reset --hard origin/dev && bash scripts/deploy.sh dev'
+            'cd /home/projects/aitek-portal && git fetch origin dev && git checkout -f dev && git reset --hard origin/dev && bash scripts/deploy.sh dev'
