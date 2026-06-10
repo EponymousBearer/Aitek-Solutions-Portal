@@ -111,10 +111,11 @@ export class ProjectsService {
     return { ...base, companyId, memberships: { some: { userId: user.id, isActive: true } } }
   }
 
-  // Projects visible to this user (see scopeWhere).
-  async list(user: AuthUser) {
+  // Projects visible to this user (see scopeWhere). Admins may narrow to one
+  // company with opts.companyId.
+  async list(user: AuthUser, opts: { companyId?: string } = {}) {
     return this.prisma.project.findMany({
-      where: this.scopeWhere(user),
+      where: { ...this.scopeWhere(user), ...(opts.companyId ? { companyId: opts.companyId } : {}) },
       orderBy: { createdAt: 'desc' },
       include: {
         company: { select: { id: true, name: true } },

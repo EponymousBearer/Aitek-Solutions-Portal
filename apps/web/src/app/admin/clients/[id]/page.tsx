@@ -15,6 +15,7 @@ import {
   type SummaryCustomRequest,
   type SummaryDoc,
 } from '@/components/onboarding/onboarding-summary'
+import { ClientProjects } from '@/components/projects/client-projects'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
 
@@ -301,6 +302,9 @@ export default function AdminClientDetailPage() {
         answers={answers}
         customRequest={customRequest}
       />
+
+      {/* This client's projects, each expandable into the full project view */}
+      <ClientProjects companyId={companyId} />
     </div>
   )
 }
