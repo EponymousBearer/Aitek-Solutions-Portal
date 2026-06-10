@@ -12,7 +12,6 @@ import {
   FileQuestion,
   Briefcase,
   FileText,
-  Receipt,
   UserCog,
   MessageSquare,
 } from 'lucide-react'
@@ -30,7 +29,6 @@ const NAV_ITEMS = [
   { href: '/admin/questionnaires', label: 'Questionnaires', icon: FileQuestion },
   { href: '/admin/services', label: 'Services', icon: Briefcase },
   { href: '/admin/agreements', label: 'Agreements', icon: FileText },
-  { href: '/admin/invoices', label: 'Invoices', icon: Receipt },
   { href: '/admin/team', label: 'Team', icon: UserCog },
 ]
 

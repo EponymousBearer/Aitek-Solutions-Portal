@@ -9,7 +9,6 @@ interface UpdatePreferencesBody {
   emailOnMessage?: boolean
   emailOnMilestone?: boolean
   emailOnKYC?: boolean
-  emailOnInvoice?: boolean
   emailOnAgreement?: boolean
   emailOnProject?: boolean
 }

@@ -20,7 +20,6 @@ type EmailPrefField =
   | 'emailOnMessage'
   | 'emailOnMilestone'
   | 'emailOnKYC'
-  | 'emailOnInvoice'
   | 'emailOnAgreement'
   | 'emailOnProject'
 
@@ -30,7 +29,6 @@ const PREF_FIELDS: EmailPrefField[] = [
   'emailOnMessage',
   'emailOnMilestone',
   'emailOnKYC',
-  'emailOnInvoice',
   'emailOnAgreement',
   'emailOnProject',
 ]
@@ -41,7 +39,6 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
   emailOnMessage: true,
   emailOnMilestone: true,
   emailOnKYC: true,
-  emailOnInvoice: true,
   emailOnAgreement: true,
   emailOnProject: true,
 }
@@ -55,7 +52,6 @@ const EMAIL_PREF_BY_TYPE: Partial<Record<NotificationType, EmailPrefField>> = {
   [NotificationType.MILESTONE_REJECTED]: 'emailOnMilestone',
   [NotificationType.PROJECT_CREATED]: 'emailOnProject',
   [NotificationType.KYC_STATUS_CHANGED]: 'emailOnKYC',
-  [NotificationType.INVOICE_CREATED]: 'emailOnInvoice',
   [NotificationType.AGREEMENT_SENT]: 'emailOnAgreement',
   [NotificationType.AGREEMENT_ACKNOWLEDGED]: 'emailOnAgreement',
   [NotificationType.DOCUMENT_UPLOADED]: 'emailOnProject',
@@ -118,7 +114,6 @@ export class NotificationsService {
             emailOnMessage: true,
             emailOnMilestone: true,
             emailOnKYC: true,
-            emailOnInvoice: true,
             emailOnAgreement: true,
             emailOnProject: true,
           },

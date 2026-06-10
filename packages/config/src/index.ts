@@ -48,6 +48,5 @@ export const R2_PREFIXES = {
   DOCUMENTS: 'documents',
   MESSAGES: 'messages',
   ONBOARDING: 'onboarding',
-  INVOICES: 'invoices',
   AVATARS: 'avatars',
 } as const

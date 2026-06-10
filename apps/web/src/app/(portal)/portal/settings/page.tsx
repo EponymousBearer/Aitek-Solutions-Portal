@@ -11,7 +11,6 @@ interface Preferences {
   emailOnMessage: boolean
   emailOnMilestone: boolean
   emailOnKYC: boolean
-  emailOnInvoice: boolean
   emailOnAgreement: boolean
   emailOnProject: boolean
 }
@@ -38,11 +37,6 @@ const ROWS: { key: PrefKey; label: string; description: string }[] = [
     key: 'emailOnKYC',
     label: 'Verification status',
     description: 'Changes to your account verification (KYC) review.',
-  },
-  {
-    key: 'emailOnInvoice',
-    label: 'Invoices',
-    description: 'When a new invoice is issued.',
   },
   {
     key: 'emailOnAgreement',
