@@ -10,6 +10,7 @@ import {
   NotFoundException,
 } from '@nestjs/common'
 import { EventEmitter2 } from '@nestjs/event-emitter'
+import { Cron, CronExpression } from '@nestjs/schedule'
 
 import { StorageService } from '../../common/storage/storage.service'
 import { PrismaService } from '../../prisma/prisma.service'
@@ -236,6 +237,13 @@ export class AgreementsService {
     if (agreement.status !== AgreementStatus.PENDING_ACKNOWLEDGMENT) {
       throw new BadRequestException('This agreement is not awaiting a signature')
     }
+    if (agreement.expiresAt && agreement.expiresAt < new Date()) {
+      await this.prisma.agreement.update({
+        where: { id: agreement.id },
+        data: { status: AgreementStatus.EXPIRED },
+      })
+      throw new BadRequestException('This agreement has expired')
+    }
 
     const signerName = input.signerName?.trim()
     if (!signerName) throw new BadRequestException('Your full legal name is required')
@@ -298,5 +306,70 @@ export class AgreementsService {
     }
     await this.prisma.agreement.delete({ where: { id } })
     return { deleted: true }
+  }
+
+  // Client declines a pending agreement (with an optional reason). AiTek are
+  // notified. Expired agreements can't be declined.
+  async decline(id: string, user: AuthUser, input: { reason?: string | null }) {
+    if (this.isAitek(user)) {
+      throw new ForbiddenException('Only the client can decline an agreement')
+    }
+    const agreement = await this.prisma.agreement.findUnique({ where: { id } })
+    if (!agreement) throw new NotFoundException('Agreement not found')
+    await this.assertCanView(agreement, user)
+
+    if (agreement.status !== AgreementStatus.PENDING_ACKNOWLEDGMENT) {
+      throw new BadRequestException('This agreement is not awaiting a response')
+    }
+    if (agreement.expiresAt && agreement.expiresAt < new Date()) {
+      await this.prisma.agreement.update({
+        where: { id: agreement.id },
+        data: { status: AgreementStatus.EXPIRED },
+      })
+      throw new BadRequestException('This agreement has expired')
+    }
+
+    await this.prisma.agreement.update({
+      where: { id: agreement.id },
+      data: {
+        status: AgreementStatus.REJECTED,
+        declineReason: input.reason?.trim() || null,
+      },
+    })
+
+    this.events.emit('agreement.declined', {
+      agreementId: agreement.id,
+      companyId: agreement.companyId,
+      projectId: agreement.projectId,
+      actorId: user.id,
+    })
+
+    return this.getOne(id, user)
+  }
+
+  // AiTek revokes a still-pending agreement (marks it EXPIRED). Signed agreements
+  // are immutable; declined/expired ones are already closed.
+  async expire(id: string, user: AuthUser) {
+    this.assertAitek(user)
+    const agreement = await this.prisma.agreement.findUnique({ where: { id } })
+    if (!agreement) throw new NotFoundException('Agreement not found')
+    if (agreement.status !== AgreementStatus.PENDING_ACKNOWLEDGMENT) {
+      throw new BadRequestException('Only a pending agreement can be revoked')
+    }
+    await this.prisma.agreement.update({
+      where: { id },
+      data: { status: AgreementStatus.EXPIRED },
+    })
+    return this.getOne(id, user)
+  }
+
+  // Auto-expire pending agreements whose deadline has passed. Hourly is plenty;
+  // sign()/decline() also guard at the moment of action.
+  @Cron(CronExpression.EVERY_HOUR)
+  async expireOverdue(): Promise<void> {
+    await this.prisma.agreement.updateMany({
+      where: { status: AgreementStatus.PENDING_ACKNOWLEDGMENT, expiresAt: { lt: new Date() } },
+      data: { status: AgreementStatus.EXPIRED },
+    })
   }
 }
