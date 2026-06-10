@@ -48,6 +48,12 @@ interface AgreementAcknowledgedEvent {
   signerName: string
   actorId: string
 }
+interface AgreementDeclinedEvent {
+  agreementId: string
+  companyId: string
+  projectId: string | null
+  actorId: string
+}
 
 @Injectable()
 export class NotificationsListener {
@@ -199,6 +205,21 @@ export class NotificationsListener {
       type: NotificationType.AGREEMENT_ACKNOWLEDGED,
       title: 'Agreement signed',
       body: `${e.signerName} signed an agreement.`,
+      data,
+    })
+  }
+
+  @OnEvent('agreement.declined')
+  async onAgreementDeclined(e: AgreementDeclinedEvent) {
+    const recipients = e.projectId
+      ? await this.aitekUserIds(e.projectId)
+      : await this.allAitekAdminIds()
+    const data: Record<string, unknown> = { agreementId: e.agreementId }
+    if (e.projectId) data.projectId = e.projectId
+    await this.notifications.notify(this.without(recipients, e.actorId), {
+      type: NotificationType.AGREEMENT_DECLINED,
+      title: 'Agreement declined',
+      body: 'A client declined an agreement.',
       data,
     })
   }

@@ -54,6 +54,7 @@ const EMAIL_PREF_BY_TYPE: Partial<Record<NotificationType, EmailPrefField>> = {
   [NotificationType.KYC_STATUS_CHANGED]: 'emailOnKYC',
   [NotificationType.AGREEMENT_SENT]: 'emailOnAgreement',
   [NotificationType.AGREEMENT_ACKNOWLEDGED]: 'emailOnAgreement',
+  [NotificationType.AGREEMENT_DECLINED]: 'emailOnAgreement',
   [NotificationType.DOCUMENT_UPLOADED]: 'emailOnProject',
 }
 
