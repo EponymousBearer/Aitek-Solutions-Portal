@@ -10,11 +10,17 @@ out
 .turbo
 *.tsbuildinfo
 
+# Uploaded documents (local disk storage — bind-mounted into the API container)
+/storage/
+.storage/
+
 # Environment files
 .env.development.local
 .env.test.local
 .env.production.local
 .env.*.local
+apps/api/.env.local
+apps/web/.env.local
 
 # Logs
 *.log

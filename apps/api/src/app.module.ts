@@ -8,9 +8,11 @@ import * as Joi from 'joi'
 
 import { ClerkAuthGuard } from './common/guards/clerk-auth.guard'
 import { RolesGuard } from './common/guards/roles.guard'
+import { StorageModule } from './common/storage/storage.module'
 import { AuthModule } from './modules/auth/auth.module'
 import { CompaniesModule } from './modules/companies/companies.module'
 import { CustomRequestsModule } from './modules/custom-requests/custom-requests.module'
+import { DocumentsModule } from './modules/documents/documents.module'
 import { HealthModule } from './modules/health/health.module'
 import { KycModule } from './modules/kyc/kyc.module'
 import { MessagesModule } from './modules/messages/messages.module'
@@ -46,6 +48,7 @@ import { PrismaModule } from './prisma/prisma.module'
     ]),
     EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
+    StorageModule,
     PrismaModule,
     HealthModule,
     AuthModule,
@@ -59,6 +62,7 @@ import { PrismaModule } from './prisma/prisma.module'
     TeamModule,
     MessagesModule,
     NotificationsModule,
+    DocumentsModule,
   ],
   providers: [
     // Global guards. ClerkAuthGuard needs DI (Prisma) so it can't be
