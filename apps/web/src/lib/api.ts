@@ -17,6 +17,13 @@ type ClerkWindow = Window & {
 }
 
 api.interceptors.request.use(async (config) => {
+  // File uploads send FormData. With the JSON default content-type, axios would
+  // serialize the FormData to JSON and drop the file — so unset it here and let
+  // the browser apply multipart/form-data with the correct boundary.
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    config.headers.delete('Content-Type')
+  }
+
   if (typeof window !== 'undefined' && !config.headers['Authorization']) {
     try {
       const clerkWindow = window as ClerkWindow
