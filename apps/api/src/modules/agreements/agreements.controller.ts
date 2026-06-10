@@ -1,19 +1,34 @@
 import { UserRole } from '@aitek/types'
 import type { AuthUser } from '@aitek/types'
-import { Body, Controller, Delete, Get, Param, Post, Query, Req } from '@nestjs/common'
-import type { Request } from 'express'
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common'
+import { FileInterceptor } from '@nestjs/platform-express'
+import type { Request, Response } from 'express'
 
 import { CurrentUser } from '../../common/decorators/current-user.decorator'
 import { Roles } from '../../common/decorators/roles.decorator'
 
 import { AgreementsService } from './agreements.service'
 
+const MAX_DOC_BYTES = 20 * 1024 * 1024 // 20MB
+
 interface CreateBody {
   projectId?: string | null
   companyId?: string
   title: string
   description?: string | null
-  body: string
+  body?: string | null
   expiresAt?: string | null
 }
 
@@ -44,10 +59,43 @@ export class AgreementsController {
     return this.agreements.getOne(id, user)
   }
 
+  // Multipart so an optional PDF rides alongside the text fields.
   @Post()
   @Roles(UserRole.AITEK_ADMIN, UserRole.AITEK_TEAM_MEMBER)
-  async create(@Body() body: CreateBody, @CurrentUser() user: AuthUser) {
-    return this.agreements.create(user, body)
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_DOC_BYTES } }))
+  async create(
+    @Body() body: CreateBody,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.agreements.create(user, body, file)
+  }
+
+  // Stream the attached PDF, authenticated by the Clerk token. Inline so the
+  // browser previews it; @Res() bypasses the global response-envelope.
+  @Get(':id/document')
+  async document(
+    @Param('id') id: string,
+    @Query('disposition') disposition: string,
+    @CurrentUser() user: AuthUser,
+    @Res() res: Response,
+  ) {
+    const d = disposition === 'attachment' ? 'attachment' : 'inline'
+    const { stream, fileName, mimeType, size } = await this.agreements.getDocumentForDownload(
+      id,
+      user,
+    )
+    const safeName = fileName.replace(/["\r\n]/g, '')
+    res.set({
+      'Content-Type': mimeType,
+      'Content-Length': String(size),
+      'Content-Disposition': `${d}; filename="${safeName}"`,
+    })
+    stream.on('error', () => {
+      if (!res.headersSent) res.status(404).end()
+      else res.end()
+    })
+    stream.pipe(res)
   }
 
   @Post(':id/sign')

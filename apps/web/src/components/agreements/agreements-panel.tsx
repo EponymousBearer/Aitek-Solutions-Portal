@@ -3,7 +3,7 @@
 import { useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileSignature, Loader2, PenLine, Plus, Trash2 } from 'lucide-react'
+import { FileSignature, FileText, Loader2, PenLine, Plus, Trash2 } from 'lucide-react'
 
 import { SignaturePad } from '@/components/agreements/signature-pad'
 import { Badge } from '@/components/ui/badge'
@@ -53,6 +53,7 @@ export interface Agreement {
   expiresAt: string | null
   company: { id: string; name: string } | null
   project: { id: string; name: string } | null
+  document: { id: string; fileName: string; mimeType: string } | null
   auditRecords: AuditRecord[]
 }
 
@@ -75,6 +76,42 @@ function StatusBadge({ status }: { status: AgreementStatus }) {
   }
   const s = map[status]
   return <Badge variant={s.variant}>{s.label}</Badge>
+}
+
+// Fetches the attached PDF as a blob (carries the Clerk token via the api
+// interceptor) and opens it in a new tab.
+function ViewPdfButton({ agreementId }: { agreementId: string }) {
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const open = async () => {
+    setLoading(true)
+    setErr(null)
+    try {
+      const res = await api.get(`/agreements/${agreementId}/document?disposition=inline`, {
+        responseType: 'blob',
+      })
+      const url = URL.createObjectURL(res.data as Blob)
+      window.open(url, '_blank', 'noopener')
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch (e) {
+      setErr(extractMessage(e, 'Failed to open the file.'))
+    } finally {
+      setLoading(false)
+    }
+  }
+  return (
+    <div className="space-y-1">
+      <Button type="button" variant="outline" size="sm" onClick={open} disabled={loading}>
+        {loading ? (
+          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+        ) : (
+          <FileText className="mr-1 h-3 w-3" />
+        )}
+        View attached PDF
+      </Button>
+      {err && <p className="text-xs text-destructive">{err}</p>}
+    </div>
+  )
 }
 
 export function AgreementsPanel({
@@ -225,22 +262,25 @@ function CreateDialog({
   const [description, setDescription] = useState('')
   const [body, setBody] = useState('')
   const [expiresAt, setExpiresAt] = useState('')
+  const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const create = useMutation({
-    mutationFn: async () =>
-      api.post('/agreements', {
-        projectId,
-        title,
-        description: description || null,
-        body,
-        expiresAt: expiresAt || null,
-      }),
+    mutationFn: async () => {
+      const form = new FormData()
+      form.append('projectId', projectId)
+      form.append('title', title)
+      if (description) form.append('description', description)
+      if (body) form.append('body', body)
+      if (expiresAt) form.append('expiresAt', expiresAt)
+      if (file) form.append('file', file)
+      await api.post('/agreements', form)
+    },
     onSuccess: onCreated,
     onError: (err) => setError(extractMessage(err, 'Failed to create agreement.')),
   })
 
-  const canSubmit = title.trim() && body.trim() && !create.isPending
+  const canSubmit = title.trim() && (body.trim() || file) && !create.isPending
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -271,14 +311,27 @@ function CreateDialog({
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="ag-body">Agreement text</Label>
+            <Label htmlFor="ag-body">Agreement text {file && <span className="text-muted-foreground">(optional — PDF attached)</span>}</Label>
             <Textarea
               id="ag-body"
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              rows={10}
+              rows={file ? 4 : 10}
               placeholder="Paste or write the full agreement the client will read and sign…"
             />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="ag-file">Attach a PDF (optional)</Label>
+            <input
+              id="ag-file"
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-accent"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              The client reads the PDF and signs it. You can provide text, a PDF, or both.
+            </p>
           </div>
           <div className="space-y-1">
             <Label htmlFor="ag-exp">Expires (optional)</Label>
@@ -338,9 +391,12 @@ function SignDialog({
           {agreement.description && <DialogDescription>{agreement.description}</DialogDescription>}
         </DialogHeader>
 
-        <div className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 text-sm text-foreground">
-          {agreement.body}
-        </div>
+        {agreement.document && <ViewPdfButton agreementId={agreement.id} />}
+        {agreement.body && (
+          <div className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 text-sm text-foreground">
+            {agreement.body}
+          </div>
+        )}
 
         <div className="space-y-3">
           <div className="space-y-1">
@@ -397,9 +453,12 @@ function ViewDialog({
           {agreement.description && <DialogDescription>{agreement.description}</DialogDescription>}
         </DialogHeader>
 
-        <div className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 text-sm text-foreground">
-          {agreement.body}
-        </div>
+        {agreement.document && <ViewPdfButton agreementId={agreement.id} />}
+        {agreement.body && (
+          <div className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 text-sm text-foreground">
+            {agreement.body}
+          </div>
+        )}
 
         {signed ? (
           <div className="space-y-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm">
