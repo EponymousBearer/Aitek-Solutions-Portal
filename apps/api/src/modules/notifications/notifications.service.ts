@@ -56,6 +56,7 @@ const EMAIL_PREF_BY_TYPE: Partial<Record<NotificationType, EmailPrefField>> = {
   [NotificationType.AGREEMENT_ACKNOWLEDGED]: 'emailOnAgreement',
   [NotificationType.AGREEMENT_DECLINED]: 'emailOnAgreement',
   [NotificationType.DOCUMENT_UPLOADED]: 'emailOnProject',
+  [NotificationType.DELIVERABLE_DELIVERED]: 'emailOnProject',
 }
 
 @Injectable()
