@@ -445,6 +445,22 @@ export class ProjectsService {
     return this.requireVisibleProject(projectId, user)
   }
 
+  // Public manage gate for sibling modules (e.g. Deliverables): admin or the
+  // project's lead PM. Throws 403 otherwise.
+  async requireProjectManage(projectId: string, user: AuthUser): Promise<void> {
+    await this.assertCanManageProject(projectId, user)
+  }
+
+  // Non-throwing variant for UI affordances ("can this user add deliverables?").
+  async canManageProject(projectId: string, user: AuthUser): Promise<boolean> {
+    try {
+      await this.assertCanManageProject(projectId, user)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   // Create / edit / submit milestones is gated by assertCanManageProject
   // (admin or the project's lead PM) — developers are view-only.
 
