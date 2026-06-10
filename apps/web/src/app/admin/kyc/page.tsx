@@ -6,7 +6,7 @@ import Link from 'next/link'
 
 import type { KYCDocumentCategory } from '@aitek/types'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, FileText, Loader2, RotateCcw, ShieldCheck } from 'lucide-react'
+import { CheckCircle2, Eye, FileText, Loader2, RotateCcw, ShieldCheck } from 'lucide-react'
 
 import { kycCategoryLabel } from '@/components/onboarding/onboarding-summary'
 import { Button } from '@/components/ui/button'
@@ -58,6 +58,22 @@ export default function AdminKYCPage() {
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ['admin-kyc-submissions'] })
 
+  // Fetch the document as a blob (carries the Clerk token via the api
+  // interceptor) and open it in a new tab.
+  const viewDocument = async (id: string) => {
+    setErrorMessage(null)
+    try {
+      const res = await api.get(`/kyc/documents/${id}/download?disposition=inline`, {
+        responseType: 'blob',
+      })
+      const url = URL.createObjectURL(res.data as Blob)
+      window.open(url, '_blank', 'noopener')
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch (err) {
+      setErrorMessage(extractMessage(err, 'Failed to open document.'))
+    }
+  }
+
   const approveMutation = useMutation({
     mutationFn: async (id: string) => {
       setErrorMessage(null)
@@ -92,11 +108,6 @@ export default function AdminKYCPage() {
           Identity-verification submissions awaiting review. Approve to clear KYC, or request a
           resubmission to send the documents back for changes.
         </p>
-      </div>
-
-      <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-        <strong>Stub mode (dev):</strong> uploads store filename + size only — document content
-        isn&apos;t retained yet (real file storage lands in a later sprint).
       </div>
 
       {errorMessage && (
@@ -166,13 +177,21 @@ export default function AdminKYCPage() {
                     key={doc.id}
                     className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm"
                   >
-                    <span className="flex items-center gap-2 text-foreground">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      {kycCategoryLabel(doc.category)}
+                    <span className="flex min-w-0 items-center gap-2 text-foreground">
+                      <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="shrink-0">{kycCategoryLabel(doc.category)}</span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        · {doc.fileName} · {(doc.fileSize / 1024).toFixed(1)} KB
+                      </span>
                     </span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {doc.fileName} · {(doc.fileSize / 1024).toFixed(1)} KB
-                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => viewDocument(doc.id)}
+                    >
+                      <Eye className="mr-1 h-3 w-3" /> View
+                    </Button>
                   </li>
                 ))}
               </ul>
