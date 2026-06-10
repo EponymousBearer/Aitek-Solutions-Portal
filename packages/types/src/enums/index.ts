@@ -119,6 +119,11 @@ export enum DocumentAccessLevel {
   CLIENT_VISIBLE = 'CLIENT_VISIBLE',
 }
 
+export enum DeliverableStatus {
+  PENDING = 'PENDING',
+  DELIVERED = 'DELIVERED',
+}
+
 export enum AgreementStatus {
   DRAFT = 'DRAFT',
   PENDING_ACKNOWLEDGMENT = 'PENDING_ACKNOWLEDGMENT',

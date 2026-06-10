@@ -9,6 +9,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react'
 
 import { MilestoneTracker } from '@/components/projects/milestone-tracker'
 import { ProjectAgreements } from '@/components/projects/project-agreements'
+import { ProjectDeliverables } from '@/components/projects/project-deliverables'
 import { ProjectDocuments } from '@/components/projects/project-documents'
 import { ProjectMessages } from '@/components/projects/project-messages'
 import { ProjectOnboarding, type ProjectCompany } from '@/components/projects/project-onboarding'
@@ -170,6 +171,9 @@ export default function PortalProjectDetailPage() {
 
       {/* Milestones — client can approve / request changes */}
       <MilestoneTracker projectId={projectId} />
+
+      {/* Deliverables — admin/PM add; client sees */}
+      <ProjectDeliverables projectId={projectId} />
 
       {/* Messages */}
       <ProjectMessages projectId={projectId} />

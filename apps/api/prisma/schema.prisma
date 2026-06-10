@@ -145,6 +145,11 @@ enum AgreementStatus {
   EXPIRED
 }
 
+enum DeliverableStatus {
+  PENDING
+  DELIVERED
+}
+
 enum NotificationChannel {
   IN_APP
   EMAIL
@@ -576,6 +581,7 @@ model Project {
   documents       Document[]
   documentFolders DocumentFolder[]
   agreements      Agreement[]
+  deliverables    Deliverable[]
   internalNotes   InternalNote[]
   auditLogs       AuditLog[]
 
@@ -813,6 +819,28 @@ model AgreementAuditRecord {
 
   @@index([agreementId])
   @@map("agreement_audit_records")
+}
+
+// Project outputs the AiTek team commits to and the client can see. Added by an
+// admin or the project's lead PM; visible to everyone who can see the project.
+model Deliverable {
+  id          String            @id @default(cuid())
+  projectId   String
+  title       String
+  description String?
+  // Optional external link to the deliverable (deployed URL, Figma, Drive, …).
+  url         String?
+  status      DeliverableStatus @default(PENDING)
+  createdById String
+  deliveredAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@map("deliverables")
 }
 
 // ─────────────────────────────────────────
