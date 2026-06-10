@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Loader2, Save } from 'lucide-react'
 
 import { MilestoneTracker } from '@/components/projects/milestone-tracker'
+import { ProjectDocuments } from '@/components/projects/project-documents'
 import { ProjectMessages } from '@/components/projects/project-messages'
 import { ProjectOnboarding, type ProjectCompany } from '@/components/projects/project-onboarding'
 import { ProjectTeam, type CompanyMemberOption } from '@/components/projects/project-team'
@@ -238,6 +239,9 @@ export function InternalProjectDetail({
 
       {/* Messages */}
       <ProjectMessages projectId={projectId} />
+
+      {/* Documents */}
+      <ProjectDocuments projectId={projectId} />
 
       {/* Onboarding submission */}
       <div>
