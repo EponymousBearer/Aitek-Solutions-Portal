@@ -3,7 +3,7 @@
 import { useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileSignature, FileText, Loader2, PenLine, Plus, Trash2 } from 'lucide-react'
+import { Ban, FileSignature, FileText, Loader2, PenLine, Plus, Trash2 } from 'lucide-react'
 
 import { SignaturePad } from '@/components/agreements/signature-pad'
 import { Badge } from '@/components/ui/badge'
@@ -51,10 +51,20 @@ export interface Agreement {
   createdAt: string
   sentAt: string | null
   expiresAt: string | null
+  declineReason: string | null
   company: { id: string; name: string } | null
   project: { id: string; name: string } | null
   document: { id: string; fileName: string; mimeType: string } | null
   auditRecords: AuditRecord[]
+}
+
+// A pending agreement past its expiry reads as EXPIRED even before the hourly
+// cron flips it in the DB.
+function effectiveStatus(a: { status: AgreementStatus; expiresAt: string | null }): AgreementStatus {
+  if (a.status === 'PENDING_ACKNOWLEDGMENT' && a.expiresAt && new Date(a.expiresAt) < new Date()) {
+    return 'EXPIRED'
+  }
+  return a.status
 }
 
 function extractMessage(err: unknown, fallback: string): string {
@@ -128,6 +138,7 @@ export function AgreementsPanel({
   const [error, setError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [signing, setSigning] = useState<Agreement | null>(null)
+  const [declining, setDeclining] = useState<Agreement | null>(null)
   const [viewing, setViewing] = useState<Agreement | null>(null)
 
   const queryKey = ['agreements', projectId ?? 'all']
@@ -150,6 +161,12 @@ export function AgreementsPanel({
     mutationFn: async (id: string) => api.delete(`/agreements/${id}`),
     onSuccess: invalidate,
     onError: (err) => setError(extractMessage(err, 'Failed to delete agreement.')),
+  })
+
+  const expire = useMutation({
+    mutationFn: async (id: string) => api.post(`/agreements/${id}/expire`),
+    onSuccess: invalidate,
+    onError: (err) => setError(extractMessage(err, 'Failed to revoke agreement.')),
   })
 
   const agreements = data ?? []
@@ -180,30 +197,52 @@ export function AgreementsPanel({
         <ul className="divide-y divide-border rounded-md border border-border">
           {agreements.map((a) => {
             const signed = a.auditRecords[0]
+            const eff = effectiveStatus(a)
+            const clientCanRespond = !isAitekTeam && eff === 'PENDING_ACKNOWLEDGMENT'
+            const subtitle = signed
+              ? `Signed by ${signed.acknowledgedName} on ${new Date(signed.acknowledgedAt).toLocaleDateString()}`
+              : eff === 'REJECTED'
+                ? 'Declined by the client'
+                : eff === 'EXPIRED'
+                  ? 'Expired'
+                  : `Sent ${new Date(a.sentAt ?? a.createdAt).toLocaleDateString()}`
             return (
               <li key={a.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate text-sm font-medium text-foreground">{a.title}</span>
-                    <StatusBadge status={a.status} />
+                    <StatusBadge status={eff} />
                   </div>
                   <p className="text-[11px] text-muted-foreground">
                     {showProject && a.project && <>{a.project.name} · </>}
                     {showProject && a.company && <>{a.company.name} · </>}
-                    {signed
-                      ? `Signed by ${signed.acknowledgedName} on ${new Date(signed.acknowledgedAt).toLocaleDateString()}`
-                      : `Sent ${new Date(a.sentAt ?? a.createdAt).toLocaleDateString()}`}
+                    {subtitle}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  {!isAitekTeam && a.status === 'PENDING_ACKNOWLEDGMENT' ? (
-                    <Button size="sm" onClick={() => setSigning(a)}>
-                      <PenLine className="mr-1 h-3 w-3" /> Review &amp; sign
-                    </Button>
+                  {clientCanRespond ? (
+                    <>
+                      <Button size="sm" onClick={() => setSigning(a)}>
+                        <PenLine className="mr-1 h-3 w-3" /> Review &amp; sign
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setDeclining(a)}>
+                        Decline
+                      </Button>
+                    </>
                   ) : (
                     <Button size="sm" variant="ghost" onClick={() => setViewing(a)}>
                       View
                     </Button>
+                  )}
+                  {isAitekTeam && a.status === 'PENDING_ACKNOWLEDGMENT' && (
+                    <button
+                      onClick={() => expire.mutate(a.id)}
+                      disabled={expire.isPending}
+                      className="text-muted-foreground hover:text-amber-600"
+                      title="Revoke (mark expired)"
+                    >
+                      <Ban className="h-3.5 w-3.5" />
+                    </button>
                   )}
                   {isAitekTeam && a.status !== 'ACKNOWLEDGED' && (
                     <button
@@ -238,6 +277,16 @@ export function AgreementsPanel({
           onClose={() => setSigning(null)}
           onSigned={() => {
             setSigning(null)
+            invalidate()
+          }}
+        />
+      )}
+      {declining && (
+        <DeclineDialog
+          agreement={declining}
+          onClose={() => setDeclining(null)}
+          onDeclined={() => {
+            setDeclining(null)
             invalidate()
           }}
         />
@@ -433,6 +482,59 @@ function SignDialog({
   )
 }
 
+function DeclineDialog({
+  agreement,
+  onClose,
+  onDeclined,
+}: {
+  agreement: Agreement
+  onClose: () => void
+  onDeclined: () => void
+}) {
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  const decline = useMutation({
+    mutationFn: async () =>
+      api.post(`/agreements/${agreement.id}/decline`, { reason: reason || null }),
+    onSuccess: onDeclined,
+    onError: (err) => setError(extractMessage(err, 'Failed to decline agreement.')),
+  })
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Decline “{agreement.title}”</DialogTitle>
+          <DialogDescription>
+            Let the team know why (optional). They’ll be notified that you declined.
+          </DialogDescription>
+        </DialogHeader>
+        <Textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          rows={4}
+          placeholder="Reason (optional)"
+        />
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={decline.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => decline.mutate()}
+            disabled={decline.isPending}
+          >
+            {decline.isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+            Decline agreement
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function ViewDialog({
   agreement,
   isAitek,
@@ -443,12 +545,13 @@ function ViewDialog({
   onClose: () => void
 }) {
   const signed = agreement.auditRecords[0]
+  const eff = effectiveStatus(agreement)
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {agreement.title} <StatusBadge status={agreement.status} />
+            {agreement.title} <StatusBadge status={eff} />
           </DialogTitle>
           {agreement.description && <DialogDescription>{agreement.description}</DialogDescription>}
         </DialogHeader>
@@ -482,6 +585,19 @@ function ViewDialog({
               </div>
             )}
           </div>
+        ) : agreement.status === 'REJECTED' ? (
+          <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-foreground">
+            <p className="font-medium text-destructive">Declined by the client.</p>
+            {agreement.declineReason && (
+              <p className="mt-1 text-muted-foreground">“{agreement.declineReason}”</p>
+            )}
+          </div>
+        ) : eff === 'EXPIRED' ? (
+          <p className="text-sm text-muted-foreground">
+            This agreement expired
+            {agreement.expiresAt && ` on ${new Date(agreement.expiresAt).toLocaleDateString()}`} and
+            can no longer be signed.
+          </p>
         ) : (
           <p className="text-sm text-muted-foreground">Not yet signed.</p>
         )}

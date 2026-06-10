@@ -37,6 +37,10 @@ interface SignBody {
   signatureImage?: string | null
 }
 
+interface DeclineBody {
+  reason?: string | null
+}
+
 // Behind nginx the real client IP is in X-Forwarded-For (first hop); fall back
 // to the socket address for direct connections.
 function clientIp(req: Request): string {
@@ -109,6 +113,22 @@ export class AgreementsController {
       ip: clientIp(req),
       userAgent: (req.headers['user-agent'] as string) || 'unknown',
     })
+  }
+
+  @Post(':id/decline')
+  async decline(
+    @Param('id') id: string,
+    @Body() body: DeclineBody,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.agreements.decline(id, user, body)
+  }
+
+  // AiTek revokes a pending agreement (marks it EXPIRED).
+  @Post(':id/expire')
+  @Roles(UserRole.AITEK_ADMIN, UserRole.AITEK_TEAM_MEMBER)
+  async expire(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.agreements.expire(id, user)
   }
 
   @Delete(':id')

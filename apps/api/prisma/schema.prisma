@@ -161,6 +161,7 @@ enum NotificationType {
   DOCUMENT_UPLOADED
   AGREEMENT_SENT
   AGREEMENT_ACKNOWLEDGED
+  AGREEMENT_DECLINED
   ONBOARDING_COMPLETED
   TEAM_MEMBER_INVITED
   CUSTOM_REQUEST_RECEIVED
@@ -776,6 +777,8 @@ model Agreement {
   body        String?
   status      AgreementStatus @default(DRAFT)
   createdById String
+  // Optional reason the client gave when declining.
+  declineReason String?
   expiresAt   DateTime?
   sentAt      DateTime?
 
