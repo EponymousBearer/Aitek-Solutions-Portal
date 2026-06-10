@@ -54,6 +54,12 @@ interface AgreementDeclinedEvent {
   projectId: string | null
   actorId: string
 }
+interface DeliverableDeliveredEvent {
+  projectId: string
+  companyId: string
+  title: string
+  actorId: string
+}
 
 @Injectable()
 export class NotificationsListener {
@@ -221,6 +227,17 @@ export class NotificationsListener {
       title: 'Agreement declined',
       body: 'A client declined an agreement.',
       data,
+    })
+  }
+
+  @OnEvent('deliverable.delivered')
+  async onDeliverableDelivered(e: DeliverableDeliveredEvent) {
+    const recipients = await this.clientUserIds(e.projectId, e.companyId)
+    await this.notifications.notify(this.without(recipients, e.actorId), {
+      type: NotificationType.DELIVERABLE_DELIVERED,
+      title: 'Deliverable ready',
+      body: `“${e.title}” has been delivered.`,
+      data: { projectId: e.projectId },
     })
   }
 }
