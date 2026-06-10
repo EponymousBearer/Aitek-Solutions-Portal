@@ -13,11 +13,11 @@ import { MilestoneTracker } from '@/components/projects/milestone-tracker'
 import { ProjectAgreements } from '@/components/projects/project-agreements'
 import { ProjectDeliverables } from '@/components/projects/project-deliverables'
 import { ProjectDocuments } from '@/components/projects/project-documents'
-import { ProjectMessages } from '@/components/projects/project-messages'
-import { ProjectOnboarding, type ProjectCompany } from '@/components/projects/project-onboarding'
+import type { ProjectCompany } from '@/components/projects/project-onboarding'
 import { ProjectTeam, type CompanyMemberOption } from '@/components/projects/project-team'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { api } from '@/lib/api'
 import { ALL_PROJECT_STATUSES, PROJECT_STATUS_LABELS, projectProgress } from '@/lib/project'
 
@@ -206,29 +206,32 @@ export default function AdminProjectDetailPage() {
         </div>
       </div>
 
-      {/* Team: lead PM, developers, client stakeholders */}
-      <ProjectTeam projectId={projectId} companyMembers={data.company.memberships ?? []} />
+      <Tabs defaultValue="company">
+        <TabsList>
+          <TabsTrigger value="company">Company info</TabsTrigger>
+          <TabsTrigger value="deliverables">Deliverables</TabsTrigger>
+          <TabsTrigger value="agreements">Agreements</TabsTrigger>
+        </TabsList>
 
-      {/* Milestones */}
-      <MilestoneTracker projectId={projectId} />
+        <TabsContent value="company" className="space-y-6">
+          {/* Team: lead PM, developers, client stakeholders */}
+          <ProjectTeam projectId={projectId} companyMembers={data.company.memberships ?? []} />
 
-      {/* Deliverables */}
-      <ProjectDeliverables projectId={projectId} />
+          {/* Milestones */}
+          <MilestoneTracker projectId={projectId} />
 
-      {/* Messages */}
-      <ProjectMessages projectId={projectId} />
+          {/* Documents */}
+          <ProjectDocuments projectId={projectId} />
+        </TabsContent>
 
-      {/* Documents */}
-      <ProjectDocuments projectId={projectId} />
+        <TabsContent value="deliverables">
+          <ProjectDeliverables projectId={projectId} />
+        </TabsContent>
 
-      {/* Agreements */}
-      <ProjectAgreements projectId={projectId} />
-
-      {/* Onboarding submission */}
-      <div>
-        <h2 className="mb-3 text-sm font-semibold text-foreground">Onboarding submission</h2>
-        <ProjectOnboarding company={data.company} />
-      </div>
+        <TabsContent value="agreements">
+          <ProjectAgreements projectId={projectId} />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
