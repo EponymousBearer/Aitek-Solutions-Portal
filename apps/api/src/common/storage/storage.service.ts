@@ -25,11 +25,17 @@ export class StorageService {
   }
 
   // Build a namespaced storage key. A uuid prefix keeps names collision-free;
-  // the original (sanitised) filename is retained for readability.
-  buildKey(parts: { companyId: string; projectId?: string | null; fileName: string }): string {
+  // the original (sanitised) filename is retained for readability. `prefix`
+  // separates kinds of files on disk (default "documents", e.g. "kyc").
+  buildKey(parts: {
+    companyId: string
+    projectId?: string | null
+    fileName: string
+    prefix?: string
+  }): string {
     const safe = parts.fileName.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-120)
     const scope = parts.projectId ? `${parts.companyId}/${parts.projectId}` : parts.companyId
-    return `documents/${scope}/${randomUUID()}-${safe}`
+    return `${parts.prefix ?? 'documents'}/${scope}/${randomUUID()}-${safe}`
   }
 
   // Resolve a storage key to an absolute path, guarding against traversal — a

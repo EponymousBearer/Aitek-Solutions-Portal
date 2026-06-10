@@ -1,27 +1,22 @@
+import type { ReadStream } from 'fs'
 
 import { CompanyMembershipRole, KYCDocumentCategory, KYCStatus, OnboardingPhase, UserRole } from '@aitek/types'
 import type { AuthUser } from '@aitek/types'
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 
+import { StorageService } from '../../common/storage/storage.service'
 import { PrismaService } from '../../prisma/prisma.service'
 import { EmailService } from '../notifications/email.service'
 import { advancePhase, assertPhaseEditable } from '../onboarding/onboarding-phase'
 
-interface CreateDocumentInput {
-  category: KYCDocumentCategory
-  fileName: string
-  fileSize: number
-  mimeType: string
-}
+const MAX_KYC_BYTES = 15 * 1024 * 1024 // 15MB
+const ALLOWED_KYC_MIME = ['application/pdf', 'image/png', 'image/jpeg']
 
-// STUB module — accepts file metadata only. No R2 upload, no admin review
-// queue. fileKey is a synthetic "stub:" URI so the row is valid. Real KYC
-// processing (R2 upload, admin queue, AI risk flags, signed URLs) lands in
-// Prompt 6 (see planning/15-hostinger-vps-deployment-plan.md + planning/12).
 @Injectable()
 export class KycService {
   constructor(
     private prisma: PrismaService,
+    private storage: StorageService,
     private emailService: EmailService,
   ) {}
 
@@ -64,8 +59,18 @@ export class KycService {
     return this.ensureSubmission(user)
   }
 
-  async addDocument(input: CreateDocumentInput, user: AuthUser) {
+  async addDocument(
+    category: KYCDocumentCategory,
+    file: Express.Multer.File | undefined,
+    user: AuthUser,
+  ) {
     if (!user.companyId) throw new ForbiddenException('User has no company')
+    if (!file) throw new BadRequestException('No file provided')
+    if (!file.size || file.size <= 0) throw new BadRequestException('File is empty')
+    if (file.size > MAX_KYC_BYTES) throw new BadRequestException('File exceeds the 15MB limit')
+    if (!ALLOWED_KYC_MIME.includes(file.mimetype)) {
+      throw new BadRequestException('Only PDF, PNG, or JPEG files are accepted')
+    }
 
     const company = await this.prisma.company.findUniqueOrThrow({
       where: { id: user.companyId },
@@ -82,24 +87,62 @@ export class KycService {
       )
     }
 
-    // Replace any existing document for this category (one doc per category per submission).
-    await this.prisma.kYCDocument.deleteMany({
-      where: { kycSubmissionId: submission.id, category: input.category },
+    // One doc per category per submission: remove the previous one (and its file)
+    // before saving the new upload.
+    const previous = await this.prisma.kYCDocument.findMany({
+      where: { kycSubmissionId: submission.id, category },
+      select: { fileKey: true },
     })
+    await this.prisma.kYCDocument.deleteMany({
+      where: { kycSubmissionId: submission.id, category },
+    })
+    for (const p of previous) void this.storage.delete(p.fileKey)
 
-    const cuid = `stub-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+    const key = this.storage.buildKey({
+      companyId: user.companyId,
+      fileName: file.originalname,
+      prefix: 'kyc',
+    })
+    await this.storage.save(key, file.buffer)
 
     return this.prisma.kYCDocument.create({
       data: {
         kycSubmissionId: submission.id,
-        category: input.category,
-        fileName: input.fileName,
-        fileSize: input.fileSize,
-        mimeType: input.mimeType,
-        fileKey: `stub:${cuid}`,
+        category,
+        fileName: file.originalname,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+        fileKey: key,
         uploadedById: user.id,
       },
     })
+  }
+
+  // Stream a KYC document for review/download. AiTek team see any; a client sees
+  // only their own company's documents.
+  async getDocumentForDownload(
+    documentId: string,
+    user: AuthUser,
+  ): Promise<{ stream: ReadStream; fileName: string; mimeType: string; size: number }> {
+    const doc = await this.prisma.kYCDocument.findUnique({
+      where: { id: documentId },
+      include: { submission: { select: { companyId: true } } },
+    })
+    if (!doc) throw new NotFoundException('Document not found')
+
+    const isAitek =
+      user.role === UserRole.AITEK_ADMIN || user.role === UserRole.AITEK_TEAM_MEMBER
+    if (!isAitek && user.companyId !== doc.submission.companyId) {
+      throw new NotFoundException('Document not found')
+    }
+
+    const { size } = await this.storage.stat(doc.fileKey)
+    return {
+      stream: this.storage.createReadStream(doc.fileKey),
+      fileName: doc.fileName,
+      mimeType: doc.mimeType,
+      size,
+    }
   }
 
   async submitForReview(user: AuthUser) {

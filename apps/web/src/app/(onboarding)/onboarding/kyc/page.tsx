@@ -59,6 +59,7 @@ export default function KycPage() {
   const queryClient = useQueryClient()
   const { ready, reviewMode } = useOnboardingPhaseGuard(OnboardingPhase.KYC)
   const [uploadingCategory, setUploadingCategory] = useState<KYCDocumentCategory | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [showUploads, setShowUploads] = useState(false)
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
@@ -86,17 +87,25 @@ export default function KycPage() {
   }
 
   const handleFile = async (category: KYCDocumentCategory, file: File) => {
+    setUploadError(null)
+    if (file.size > 15 * 1024 * 1024) {
+      setUploadError('File exceeds the 15MB limit.')
+      return
+    }
     setUploadingCategory(category)
     try {
-      await api.post('/kyc/me/documents', {
-        category,
-        fileName: file.name,
-        fileSize: file.size,
-        mimeType: file.type || 'application/octet-stream',
-      })
+      const form = new FormData()
+      form.append('category', category)
+      form.append('file', file)
+      await api.post('/kyc/me/documents', form)
       await queryClient.invalidateQueries({ queryKey: ['kyc-me'] })
     } catch (err) {
-      console.error(err)
+      const msg =
+        typeof err === 'object' &&
+        err !== null &&
+        'response' in err &&
+        (err as { response?: { data?: { message?: string } } }).response?.data?.message
+      setUploadError(typeof msg === 'string' ? msg : 'Upload failed. Please try again.')
     } finally {
       setUploadingCategory(null)
     }
@@ -147,10 +156,11 @@ export default function KycPage() {
         business identity. It&apos;s quick.
       </BotBubble>
 
-      <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-        <strong>Stub mode (dev):</strong> file content is discarded after upload — only the
-        filename + size are stored. Real R2 upload lands in Prompt 6.
-      </div>
+      {uploadError && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          {uploadError}
+        </div>
+      )}
 
       {!showUploads && <TypingIndicator />}
 
