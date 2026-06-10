@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common'
 
@@ -54,10 +55,11 @@ interface MilestoneBody {
 export class ProjectsController {
   constructor(private projects: ProjectsService) {}
 
-  // Both roles: admins get all projects, clients get their company's.
+  // Both roles: admins get all projects, clients get their company's. An admin
+  // may filter to one company via ?companyId= (e.g. the client detail page).
   @Get()
-  async list(@CurrentUser() user: AuthUser) {
-    return this.projects.list(user)
+  async list(@CurrentUser() user: AuthUser, @Query('companyId') companyId?: string) {
+    return this.projects.list(user, { companyId: companyId || undefined })
   }
 
   @Get(':id')
