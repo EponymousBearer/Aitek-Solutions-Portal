@@ -19,7 +19,6 @@ out
 .env.test.local
 .env.production.local
 .env.*.local
-.env
 apps/api/.env.local
 apps/web/.env.local
 

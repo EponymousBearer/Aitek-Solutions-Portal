@@ -35,6 +35,19 @@ interface MessageCreatedEvent {
   isInternal: boolean
   message: { senderId: string; sender: { firstName: string; lastName: string; email: string } | null }
 }
+interface AgreementSentEvent {
+  agreementId: string
+  companyId: string
+  projectId: string | null
+  actorId: string
+}
+interface AgreementAcknowledgedEvent {
+  agreementId: string
+  companyId: string
+  projectId: string | null
+  signerName: string
+  actorId: string
+}
 
 @Injectable()
 export class NotificationsListener {
@@ -76,6 +89,24 @@ export class NotificationsListener {
       }),
     ])
     return [...stake.map((r) => r.userId), ...admins.map((r) => r.userId)]
+  }
+
+  // Every active client member of a company (for agreements with no project).
+  private async companyClientUserIds(companyId: string): Promise<string[]> {
+    const members = await this.prisma.companyMembership.findMany({
+      where: { companyId, isActive: true },
+      select: { userId: true },
+    })
+    return members.map((m) => m.userId)
+  }
+
+  // All AiTek admins (for agreements with no project to scope a lead/members).
+  private async allAitekAdminIds(): Promise<string[]> {
+    const admins = await this.prisma.user.findMany({
+      where: { role: UserRole.AITEK_ADMIN, deletedAt: null },
+      select: { id: true },
+    })
+    return admins.map((a) => a.id)
   }
 
   private without(ids: string[], exclude?: string): string[] {
@@ -139,6 +170,36 @@ export class NotificationsListener {
       title: 'New message',
       body: `${name} sent a message.`,
       data: { projectId: e.projectId },
+    })
+  }
+
+  @OnEvent('agreement.sent')
+  async onAgreementSent(e: AgreementSentEvent) {
+    const recipients = e.projectId
+      ? await this.clientUserIds(e.projectId, e.companyId)
+      : await this.companyClientUserIds(e.companyId)
+    const data: Record<string, unknown> = { agreementId: e.agreementId }
+    if (e.projectId) data.projectId = e.projectId
+    await this.notifications.notify(this.without(recipients, e.actorId), {
+      type: NotificationType.AGREEMENT_SENT,
+      title: 'Agreement awaiting your signature',
+      body: 'A new agreement is ready for you to review and sign.',
+      data,
+    })
+  }
+
+  @OnEvent('agreement.acknowledged')
+  async onAgreementAcknowledged(e: AgreementAcknowledgedEvent) {
+    const recipients = e.projectId
+      ? await this.aitekUserIds(e.projectId)
+      : await this.allAitekAdminIds()
+    const data: Record<string, unknown> = { agreementId: e.agreementId }
+    if (e.projectId) data.projectId = e.projectId
+    await this.notifications.notify(this.without(recipients, e.actorId), {
+      type: NotificationType.AGREEMENT_ACKNOWLEDGED,
+      title: 'Agreement signed',
+      body: `${e.signerName} signed an agreement.`,
+      data,
     })
   }
 }
