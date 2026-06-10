@@ -1,6 +1,7 @@
 import { createHash } from 'crypto'
+import type { ReadStream } from 'fs'
 
-import { AgreementStatus, UserRole } from '@aitek/types'
+import { AgreementStatus, DocumentAccessLevel, UserRole } from '@aitek/types'
 import type { AuthUser } from '@aitek/types'
 import {
   BadRequestException,
@@ -10,6 +11,7 @@ import {
 } from '@nestjs/common'
 import { EventEmitter2 } from '@nestjs/event-emitter'
 
+import { StorageService } from '../../common/storage/storage.service'
 import { PrismaService } from '../../prisma/prisma.service'
 import { ProjectsService } from '../projects/projects.service'
 
@@ -17,11 +19,15 @@ import { ProjectsService } from '../projects/projects.service'
 // this just stops an oversized payload from bloating the audit row.
 const MAX_SIGNATURE_BYTES = 1_500_000
 
+// Attached agreement PDF size cap.
+const MAX_DOC_BYTES = 20 * 1024 * 1024 // 20MB
+
 const signerSelect = { id: true, firstName: true, lastName: true } as const
 
 const agreementInclude = {
   company: { select: { id: true, name: true } },
   project: { select: { id: true, name: true } },
+  document: { select: { id: true, fileName: true, mimeType: true } },
   auditRecords: {
     orderBy: { acknowledgedAt: 'desc' as const },
     take: 1,
@@ -34,7 +40,7 @@ interface CreateInput {
   companyId?: string
   title: string
   description?: string | null
-  body: string
+  body?: string | null
   expiresAt?: string | null
 }
 
@@ -48,6 +54,7 @@ export class AgreementsService {
   constructor(
     private prisma: PrismaService,
     private projects: ProjectsService,
+    private storage: StorageService,
     private events: EventEmitter2,
   ) {}
 
@@ -110,13 +117,21 @@ export class AgreementsService {
 
   // Create + send in one step (AiTek only). projectId scopes it to a project and
   // derives the client company; otherwise companyId must be supplied directly.
-  async create(user: AuthUser, input: CreateInput) {
+  // An optional PDF is stored as a (client-visible) Document and linked.
+  async create(user: AuthUser, input: CreateInput, file?: Express.Multer.File) {
     this.assertAitek(user)
 
     const title = input.title?.trim()
-    const body = input.body?.trim()
+    const body = input.body?.trim() || null
     if (!title) throw new BadRequestException('A title is required')
-    if (!body) throw new BadRequestException('The agreement text is required')
+    if (!body && !file) throw new BadRequestException('Provide agreement text or attach a PDF')
+
+    if (file) {
+      if (file.mimetype !== 'application/pdf') {
+        throw new BadRequestException('Only PDF files are supported')
+      }
+      if (file.size > MAX_DOC_BYTES) throw new BadRequestException('PDF exceeds the 20MB limit')
+    }
 
     let companyId = input.companyId
     let projectId: string | null = null
@@ -134,10 +149,32 @@ export class AgreementsService {
       expiresAt = d
     }
 
+    // Persist the PDF (if any) as a client-visible Document. No projectId, so it
+    // surfaces only through the agreement, not the project's Documents list.
+    let documentId: string | null = null
+    if (file) {
+      const key = this.storage.buildKey({ companyId, fileName: file.originalname })
+      await this.storage.save(key, file.buffer)
+      const doc = await this.prisma.document.create({
+        data: {
+          companyId,
+          name: title,
+          fileKey: key,
+          fileName: file.originalname,
+          fileSize: file.size,
+          mimeType: file.mimetype,
+          accessLevel: DocumentAccessLevel.CLIENT_VISIBLE,
+          uploadedById: user.id,
+        },
+      })
+      documentId = doc.id
+    }
+
     const agreement = await this.prisma.agreement.create({
       data: {
         companyId,
         projectId,
+        documentId,
         title,
         description: input.description?.trim() || null,
         body,
@@ -159,14 +196,40 @@ export class AgreementsService {
     return agreement
   }
 
+  // Stream the attached PDF (access-checked). 404 if there's no document.
+  async getDocumentForDownload(
+    id: string,
+    user: AuthUser,
+  ): Promise<{ stream: ReadStream; fileName: string; mimeType: string; size: number }> {
+    const agreement = await this.prisma.agreement.findUnique({
+      where: { id },
+      include: { document: true },
+    })
+    if (!agreement) throw new NotFoundException('Agreement not found')
+    await this.assertCanView(agreement, user)
+    if (!agreement.document) throw new NotFoundException('This agreement has no attached file')
+
+    const { size } = await this.storage.stat(agreement.document.fileKey)
+    return {
+      stream: this.storage.createReadStream(agreement.document.fileKey),
+      fileName: agreement.document.fileName,
+      mimeType: agreement.document.mimeType,
+      size,
+    }
+  }
+
   // Client signs: records the typed legal name + drawn signature, an integrity
-  // hash of exactly what they signed, and the request's IP/UA for the audit.
+  // hash of exactly what they signed (the PDF bytes if attached, else the body),
+  // and the request's IP/UA for the audit.
   async sign(id: string, user: AuthUser, input: SignInput, meta: { ip: string; userAgent: string }) {
     if (this.isAitek(user)) {
       throw new ForbiddenException('AiTek team members cannot sign on the client’s behalf')
     }
 
-    const agreement = await this.prisma.agreement.findUnique({ where: { id } })
+    const agreement = await this.prisma.agreement.findUnique({
+      where: { id },
+      include: { document: true },
+    })
     if (!agreement) throw new NotFoundException('Agreement not found')
     await this.assertCanView(agreement, user)
 
@@ -186,10 +249,14 @@ export class AgreementsService {
       throw new BadRequestException('Signature image is too large')
     }
 
-    // Hash exactly what was presented to the signer (the agreement body).
-    const documentHash = createHash('sha256')
-      .update(agreement.body ?? '', 'utf8')
-      .digest('hex')
+    // Hash exactly what was presented to the signer.
+    const hash = createHash('sha256')
+    if (agreement.document) {
+      hash.update(await this.storage.readToBuffer(agreement.document.fileKey))
+    } else {
+      hash.update(agreement.body ?? '', 'utf8')
+    }
+    const documentHash = hash.digest('hex')
 
     await this.prisma.$transaction([
       this.prisma.agreementAuditRecord.create({

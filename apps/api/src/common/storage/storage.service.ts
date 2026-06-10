@@ -66,6 +66,12 @@ export class StorageService {
     return createReadStream(this.resolvePath(key))
   }
 
+  // Read the whole file into memory (e.g. to hash it). Caller is responsible for
+  // only doing this on size-bounded files.
+  async readToBuffer(key: string): Promise<Buffer> {
+    return fs.readFile(this.resolvePath(key))
+  }
+
   // Best-effort delete — never fail the request if the file is already gone.
   async delete(key: string): Promise<void> {
     try {
