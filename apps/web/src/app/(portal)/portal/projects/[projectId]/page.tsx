@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 
 import { MilestoneTracker } from '@/components/projects/milestone-tracker'
+import { ProjectDocuments } from '@/components/projects/project-documents'
 import { ProjectMessages } from '@/components/projects/project-messages'
 import { ProjectOnboarding, type ProjectCompany } from '@/components/projects/project-onboarding'
 import { api } from '@/lib/api'
@@ -171,6 +172,9 @@ export default function PortalProjectDetailPage() {
 
       {/* Messages */}
       <ProjectMessages projectId={projectId} />
+
+      {/* Documents — client sees client-visible files */}
+      <ProjectDocuments projectId={projectId} />
 
       {/* Onboarding details */}
       <div>

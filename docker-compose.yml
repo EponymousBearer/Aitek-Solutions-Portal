@@ -33,14 +33,18 @@ services:
       - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
       - CLERK_WEBHOOK_SECRET=${CLERK_WEBHOOK_SECRET}
       - JWT_SECRET=${JWT_SECRET}
-      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
-      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
-      - R2_BUCKET_NAME=${R2_BUCKET_NAME}
-      - R2_ENDPOINT=${R2_ENDPOINT}
+      # Document storage lives on local disk inside this mount (see volumes
+      # below). The host folder is bind-mounted so files survive image rebuilds.
+      - STORAGE_DIR=/app/storage
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
       - RESEND_API_KEY=${RESEND_API_KEY}
       - EMAIL_FROM=${EMAIL_FROM}
       - SENTRY_DSN=${SENTRY_DSN}
+    volumes:
+      # Uploaded documents. A host bind-mount (not a named volume) keeps the
+      # files at <repo>/storage on the VPS — easy to back up, and git's
+      # reset --hard on deploy never touches ignored paths, so uploads persist.
+      - ./storage:/app/storage
     restart: unless-stopped
     depends_on:
       postgres:
