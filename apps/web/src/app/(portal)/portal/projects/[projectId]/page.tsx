@@ -11,8 +11,8 @@ import { MilestoneTracker } from '@/components/projects/milestone-tracker'
 import { ProjectAgreements } from '@/components/projects/project-agreements'
 import { ProjectDeliverables } from '@/components/projects/project-deliverables'
 import { ProjectDocuments } from '@/components/projects/project-documents'
-import { ProjectMessages } from '@/components/projects/project-messages'
-import { ProjectOnboarding, type ProjectCompany } from '@/components/projects/project-onboarding'
+import type { ProjectCompany } from '@/components/projects/project-onboarding'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { api } from '@/lib/api'
 import { PROJECT_STATUS_LABELS, projectProgress, projectStatusBadgeClass } from '@/lib/project'
 
@@ -152,43 +152,46 @@ export default function PortalProjectDetailPage() {
         </div>
       </div>
 
-      {/* Assigned AiTek team */}
-      {aitekTeam.length > 0 && (
-        <div className="space-y-3 rounded-xl border border-border bg-background p-5">
-          <h2 className="text-sm font-semibold text-foreground">Your AiTek team</h2>
-          <ul className="space-y-1.5">
-            {aitekTeam.map((m) => (
-              <li key={m.id} className="flex items-center justify-between text-sm">
-                <span className="text-foreground">{memberName(m.user)}</span>
-                <span className="text-xs text-muted-foreground">
-                  {AITEK_ROLE_LABEL[m.role] ?? 'Team'}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <Tabs defaultValue="company">
+        <TabsList>
+          <TabsTrigger value="company">Company info</TabsTrigger>
+          <TabsTrigger value="deliverables">Deliverables</TabsTrigger>
+          <TabsTrigger value="agreements">Agreements</TabsTrigger>
+        </TabsList>
 
-      {/* Milestones — client can approve / request changes */}
-      <MilestoneTracker projectId={projectId} />
+        <TabsContent value="company" className="space-y-6">
+          {/* Assigned AiTek team */}
+          {aitekTeam.length > 0 && (
+            <div className="space-y-3 rounded-xl border border-border bg-background p-5">
+              <h2 className="text-sm font-semibold text-foreground">Your AiTek team</h2>
+              <ul className="space-y-1.5">
+                {aitekTeam.map((m) => (
+                  <li key={m.id} className="flex items-center justify-between text-sm">
+                    <span className="text-foreground">{memberName(m.user)}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {AITEK_ROLE_LABEL[m.role] ?? 'Team'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
-      {/* Deliverables — admin/PM add; client sees */}
-      <ProjectDeliverables projectId={projectId} />
+          {/* Milestones — client can approve / request changes */}
+          <MilestoneTracker projectId={projectId} />
 
-      {/* Messages */}
-      <ProjectMessages projectId={projectId} />
+          {/* Documents — client sees client-visible files */}
+          <ProjectDocuments projectId={projectId} />
+        </TabsContent>
 
-      {/* Documents — client sees client-visible files */}
-      <ProjectDocuments projectId={projectId} />
+        <TabsContent value="deliverables">
+          <ProjectDeliverables projectId={projectId} />
+        </TabsContent>
 
-      {/* Agreements — client reviews + signs */}
-      <ProjectAgreements projectId={projectId} />
-
-      {/* Onboarding details */}
-      <div>
-        <h2 className="mb-3 text-sm font-semibold text-foreground">What you told us during onboarding</h2>
-        <ProjectOnboarding company={data.company} />
-      </div>
+        <TabsContent value="agreements">
+          <ProjectAgreements projectId={projectId} />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
