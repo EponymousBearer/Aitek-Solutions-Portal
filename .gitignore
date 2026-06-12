@@ -14,7 +14,8 @@ out
 /storage/
 .storage/
 
-# Environment files
+# Environment files — never commit secrets
+.env
 .env.development.local
 .env.test.local
 .env.production.local
@@ -52,6 +53,9 @@ Thumbs.db
 
 # Sentry
 .sentryclirc
+
+# Local-only diagnostic / one-off scripts (run manually on the VPS, never committed)
+apps/api/prisma/diagnose-client.ts
 
 # Claude
 .claude
