@@ -3,7 +3,7 @@
 import { useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Ban, FileSignature, FileText, Loader2, PenLine, Plus, Trash2 } from 'lucide-react'
+import { Ban, Download, FileSignature, FileText, Loader2, PenLine, Plus, Trash2 } from 'lucide-react'
 
 import { SignaturePad } from '@/components/agreements/signature-pad'
 import { Badge } from '@/components/ui/badge'
@@ -89,36 +89,78 @@ function StatusBadge({ status }: { status: AgreementStatus }) {
 }
 
 // Fetches the attached PDF as a blob (carries the Clerk token via the api
-// interceptor) and opens it in a new tab.
-function ViewPdfButton({ agreementId }: { agreementId: string }) {
-  const [loading, setLoading] = useState(false)
+// interceptor). The client can preview it in a new tab and download a copy —
+// both available before signing.
+function ViewPdfButton({ agreementId, fileName }: { agreementId: string; fileName?: string }) {
+  const [loading, setLoading] = useState<'view' | 'download' | null>(null)
   const [err, setErr] = useState<string | null>(null)
-  const open = async () => {
-    setLoading(true)
-    setErr(null)
-    try {
-      const res = await api.get(`/agreements/${agreementId}/document?disposition=inline`, {
+
+  const fetchBlob = async (disposition: 'inline' | 'attachment') =>
+    (
+      await api.get(`/agreements/${agreementId}/document?disposition=${disposition}`, {
         responseType: 'blob',
       })
-      const url = URL.createObjectURL(res.data as Blob)
+    ).data as Blob
+
+  const view = async () => {
+    setLoading('view')
+    setErr(null)
+    try {
+      const url = URL.createObjectURL(await fetchBlob('inline'))
       window.open(url, '_blank', 'noopener')
       setTimeout(() => URL.revokeObjectURL(url), 60_000)
     } catch (e) {
       setErr(extractMessage(e, 'Failed to open the file.'))
     } finally {
-      setLoading(false)
+      setLoading(null)
     }
   }
+
+  const download = async () => {
+    setLoading('download')
+    setErr(null)
+    try {
+      const url = URL.createObjectURL(await fetchBlob('attachment'))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName || 'agreement.pdf'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch (e) {
+      setErr(extractMessage(e, 'Failed to download the file.'))
+    } finally {
+      setLoading(null)
+    }
+  }
+
   return (
     <div className="space-y-1">
-      <Button type="button" variant="outline" size="sm" onClick={open} disabled={loading}>
-        {loading ? (
-          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-        ) : (
-          <FileText className="mr-1 h-3 w-3" />
-        )}
-        View attached PDF
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={view} disabled={loading !== null}>
+          {loading === 'view' ? (
+            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+          ) : (
+            <FileText className="mr-1 h-3 w-3" />
+          )}
+          View PDF
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={download}
+          disabled={loading !== null}
+        >
+          {loading === 'download' ? (
+            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+          ) : (
+            <Download className="mr-1 h-3 w-3" />
+          )}
+          Download
+        </Button>
+      </div>
       {err && <p className="text-xs text-destructive">{err}</p>}
     </div>
   )
@@ -440,7 +482,9 @@ function SignDialog({
           {agreement.description && <DialogDescription>{agreement.description}</DialogDescription>}
         </DialogHeader>
 
-        {agreement.document && <ViewPdfButton agreementId={agreement.id} />}
+        {agreement.document && (
+          <ViewPdfButton agreementId={agreement.id} fileName={agreement.document.fileName} />
+        )}
         {agreement.body && (
           <div className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 text-sm text-foreground">
             {agreement.body}
@@ -556,7 +600,9 @@ function ViewDialog({
           {agreement.description && <DialogDescription>{agreement.description}</DialogDescription>}
         </DialogHeader>
 
-        {agreement.document && <ViewPdfButton agreementId={agreement.id} />}
+        {agreement.document && (
+          <ViewPdfButton agreementId={agreement.id} fileName={agreement.document.fileName} />
+        )}
         {agreement.body && (
           <div className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 text-sm text-foreground">
             {agreement.body}

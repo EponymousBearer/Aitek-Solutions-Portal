@@ -8,7 +8,6 @@ import {
   FolderKanban,
   FileText,
   MessageSquare,
-  FileSignature,
   Settings,
 } from 'lucide-react'
 
@@ -20,7 +19,6 @@ const NAV_ITEMS = [
   { href: '/portal/projects', label: 'Projects', icon: FolderKanban },
   { href: '/portal/documents', label: 'Documents', icon: FileText },
   { href: '/portal/messages', label: 'Messages', icon: MessageSquare },
-  { href: '/portal/agreements', label: 'Agreements', icon: FileSignature },
   { href: '/portal/settings', label: 'Settings', icon: Settings },
 ]
 

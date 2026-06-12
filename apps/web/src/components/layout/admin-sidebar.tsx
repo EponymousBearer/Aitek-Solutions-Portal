@@ -10,7 +10,6 @@ import {
   ShieldCheck,
   Sparkles,
   FileQuestion,
-  FileText,
   UserCog,
   MessageSquare,
 } from 'lucide-react'
@@ -26,7 +25,6 @@ const NAV_ITEMS = [
   { href: '/admin/projects', label: 'Projects', icon: FolderKanban },
   { href: '/admin/messages', label: 'Messages', icon: MessageSquare },
   { href: '/admin/questionnaires', label: 'Questionnaires', icon: FileQuestion },
-  { href: '/admin/agreements', label: 'Agreements', icon: FileText },
   { href: '/admin/team', label: 'Team', icon: UserCog },
 ]
 
