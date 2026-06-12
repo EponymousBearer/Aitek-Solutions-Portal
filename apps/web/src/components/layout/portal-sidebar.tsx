@@ -3,13 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
-import {
-  LayoutDashboard,
-  FolderKanban,
-  FileText,
-  MessageSquare,
-  Settings,
-} from 'lucide-react'
+import { LayoutDashboard, FolderKanban, MessageSquare, Settings } from 'lucide-react'
 
 import { BrandLogo } from '@/components/layout/brand-logo'
 import { cn } from '@/lib/utils'
@@ -17,7 +11,6 @@ import { cn } from '@/lib/utils'
 const NAV_ITEMS = [
   { href: '/portal', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/portal/projects', label: 'Projects', icon: FolderKanban },
-  { href: '/portal/documents', label: 'Documents', icon: FileText },
   { href: '/portal/messages', label: 'Messages', icon: MessageSquare },
   { href: '/portal/settings', label: 'Settings', icon: Settings },
 ]
