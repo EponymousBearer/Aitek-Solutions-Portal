@@ -236,8 +236,10 @@ export function InternalProjectDetail({
       <Tabs defaultValue="company">
         <TabsList>
           <TabsTrigger value="company">Company info</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="deliverables">Deliverables</TabsTrigger>
-          <TabsTrigger value="agreements">Agreements</TabsTrigger>
+          {/* Developers (read-only area) don't see agreements; PMs do. */}
+          {canEdit && <TabsTrigger value="agreements">Agreements</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="company" className="space-y-6">
@@ -246,8 +248,9 @@ export function InternalProjectDetail({
 
           {/* Milestones — AiTek team can create/edit/submit */}
           <MilestoneTracker projectId={projectId} />
+        </TabsContent>
 
-          {/* Documents */}
+        <TabsContent value="documents">
           <ProjectDocuments projectId={projectId} />
         </TabsContent>
 
@@ -255,9 +258,11 @@ export function InternalProjectDetail({
           <ProjectDeliverables projectId={projectId} />
         </TabsContent>
 
-        <TabsContent value="agreements">
-          <ProjectAgreements projectId={projectId} />
-        </TabsContent>
+        {canEdit && (
+          <TabsContent value="agreements">
+            <ProjectAgreements projectId={projectId} />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   )
